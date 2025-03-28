@@ -1,6 +1,6 @@
 from marshmallow import Schema, fields, post_load
 
-from models.cpu_info import CPUInfo
+from models.cpu_info import CPUInfo, CPUInfoSchema
 from models.gpu_info import GPUInfo, GPUInfoSchema
 
 

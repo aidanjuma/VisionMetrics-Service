@@ -3,7 +3,7 @@ import pynvml
 from models.gpu_info import GPUInfo
 
 
-def get_gpu_info() -> []:
+def get_gpu_info() -> [GPUInfo]:
     gpu_list = []
 
     try:

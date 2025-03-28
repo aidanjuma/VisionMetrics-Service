@@ -35,8 +35,12 @@ def get_gpu_info() -> [GPUInfo]:
                     memory_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
                     vram_capacity = int(memory_info.total // (1024 ** 3))
 
+                    # Get bus ID for current GPU:
+                    pci_info = pynvml.nvmlDeviceGetPciInfo(handle)
+                    bus_id = pci_info.busId.decode() if isinstance(pci_info.busId, bytes) else pci_info.busId
+
                     # Append to device list, ready for return later:
-                    gpu_list.append(GPUInfo(name=name, vram_capacity=vram_capacity))
+                    gpu_list.append(GPUInfo(name=name, bus_id=bus_id, vram_capacity=vram_capacity))
                 except pynvml.NVMLError as err:
                     print(f'Error retrieving info for GPU (index {idx}): {err}')
         finally:

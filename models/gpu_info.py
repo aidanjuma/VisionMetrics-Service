@@ -2,16 +2,18 @@ from marshmallow import Schema, fields, post_load
 
 
 class GPUInfo:
-    def __init__(self, name: str, vram_capacity: int):
+    def __init__(self, name: str, bus_id: str, vram_capacity: int):
         self.name = name
+        self.bus_id = bus_id
         self.vram_capacity = vram_capacity
 
     def __repr__(self):
-        return f'<GPUInfo(name={self.name}, vram_capacity={self.vram_capacity})>'
+        return f'<GPUInfo(name={self.name}, bus_id={self.bus_id}, vram_capacity={self.vram_capacity})>'
 
 
 class GPUInfoSchema(Schema):
     name = fields.String(required=True)
+    bus_id = fields.String(required=False, default=None)
     vram_capacity = fields.Integer(required=True)
 
     @post_load

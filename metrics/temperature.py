@@ -1,11 +1,13 @@
-import platform
-
-from models.temperature_group import TemperatureGroup
+import subprocess
 
 
-def get_temperatures() -> [TemperatureGroup]:
-    # psutil.sensors_temperatures() only supports Linux, and that's all I need for now.
-    if platform.system() != 'Linux':
-        print('Temperature monitoring is only supported on Linux at this time.')
+def get_core_temperature_nvidia_gpu() -> []:
+    temperature = subprocess.run(
+        ['nvidia-smi', '--query-gpu=timestamp,name,pci.bus_id,temperature.gpu', '--format=csv,noheader'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True
+    )
 
-    # TODO: Spin up a virtual machine with an NVIDIA GPU to be able to write logic properly.
+    # TODO: Implant/link in with custom model(s).

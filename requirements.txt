@@ -1,0 +1,11 @@
+marshmallow==3.26.1
+numpy==2.2.4
+nvidia-ml-py==12.570.86
+packaging==24.2
+platformdirs==4.3.7
+psutil==7.0.0
+py-cpuinfo==9.0.0
+pyopencl==2025.1
+pytools==2025.1.2
+siphash24==1.7
+typing_extensions==4.13.0

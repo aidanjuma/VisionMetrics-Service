@@ -4,12 +4,12 @@ import psutil
 from models.cpu_info import CPUInfo
 
 
-def get_cpu_name() -> str:
+def __get_cpu_name() -> str:
     info = cpuinfo.get_cpu_info()
     return info.get('brand_raw', 'Unknown')
 
 
-def get_cpu_details() -> CPUInfo:
+def get_cpu_info() -> CPUInfo:
     physical_cores = psutil.cpu_count(logical=False)
     total_cores = psutil.cpu_count(logical=True)
     frequency = psutil.cpu_freq()
@@ -17,7 +17,7 @@ def get_cpu_details() -> CPUInfo:
     max_frequency = frequency.max if frequency else 0.0
 
     return CPUInfo(
-        name=get_cpu_name(),
+        name=__get_cpu_name(),
         physical_cores=physical_cores,
         total_cores=total_cores,
         min_frequency=min_frequency,

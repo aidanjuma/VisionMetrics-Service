@@ -31,16 +31,16 @@ def get_gpu_info() -> [GPUInfo]:
                     raw_name = pynvml.nvmlDeviceGetName(handle)
                     name = raw_name.decode('utf-8') if isinstance(raw_name, bytes) else raw_name
 
-                    # Get total VRAM, coercing GiB:
+                    # Get total VRAM, coercing MiB:
                     memory_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-                    vram_capacity = int(memory_info.total // (1024 ** 3))
+                    vram_capacity_mib = int(memory_info.total // (1024 ** 2))
 
                     # Get bus ID for current GPU:
                     pci_info = pynvml.nvmlDeviceGetPciInfo(handle)
                     bus_id = pci_info.busId.decode() if isinstance(pci_info.busId, bytes) else pci_info.busId
 
                     # Append to device list, ready for return later:
-                    gpu_list.append(GPUInfo(name=name, bus_id=bus_id, vram_capacity=vram_capacity))
+                    gpu_list.append(GPUInfo(name=name, bus_id=bus_id, vram_capacity_mib=vram_capacity_mib))
                 except pynvml.NVMLError as err:
                     print(f'Error retrieving info for GPU (index {idx}): {err}')
         finally:
@@ -64,7 +64,7 @@ def get_gpu_info() -> [GPUInfo]:
 
                     # In the case that a GPU was accounted for more than once, do not add to list.
                     if not any(gpu.name == name for gpu in gpu_list):
-                        gpu_list.append(GPUInfo(name=name, vram_capacity=vram_capacity))
+                        gpu_list.append(GPUInfo(name=name, vram_capacity_mib=vram_capacity))
 
         except Exception as err:
             print('Error retrieving GPU info using OpenCL via pyopencl:', err)

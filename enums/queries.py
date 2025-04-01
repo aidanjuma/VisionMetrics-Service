@@ -53,3 +53,22 @@ class FixedDBQuery(enum.Enum):
         FOREIGN KEY (gpu_id) REFERENCES gpu_info(gpu_id)
     );
     '''
+
+    WRITE_GPU_STATUS_RECORD = '''
+    INSERT INTO gpu_status (
+    gpu_id,
+    timestamp,
+    p_state,
+    temperature,
+    gpu_utilization,
+    memory_utilization,
+    clock_sm,
+    clock_memory,
+    clock_graphics,
+    power_usage,
+    memory_free_mib,
+    memory_used_mib,
+    pcie_rx,
+    pcie_tx
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    '''

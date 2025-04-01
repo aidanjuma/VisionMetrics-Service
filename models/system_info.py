@@ -10,13 +10,13 @@ class SystemInfo:
         self.gpus = gpus
         self.ram_capacity = ram_capacity
         self.disk_capacity = disk_capacity
-        self.total_gpu_memory = sum(gpu.vram_capacity for gpu in gpus)
+        self.total_vram_capacity = sum(gpu.vram_capacity for gpu in gpus)
 
     def __repr__(self):
         return (
             f'<SystemInfo(cpu={self.cpu}, gpus={self.gpus}, '
             f'ram_capacity={self.ram_capacity}, disk_capacity={self.disk_capacity}, '
-            f'total_gpu_memory={self.total_gpu_memory})>'
+            f'total_vram_capacity={self.total_vram_capacity})>'
         )
 
 

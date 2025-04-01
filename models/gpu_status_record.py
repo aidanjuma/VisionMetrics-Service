@@ -1,4 +1,4 @@
-from marshmallow import Schema, fields
+from marshmallow import Schema, fields, post_load
 
 from models.gpu_info import GPUInfo
 
@@ -6,7 +6,8 @@ from models.gpu_info import GPUInfo
 class GPUStatusRecord(GPUInfo):
     def __init__(self, name: str, bus_id: str, vram_capacity_mib: int, timestamp: str, p_state: str, temperature: int,
                  gpu_utilization: int, memory_utilization: int, clock_sm: int, clock_memory: int, clock_graphics: int,
-                 power_usage: int, memory_free_mib: int, memory_used_mib: int, pcie_rx: int, pcie_tx: int):
+                 power_usage: int, memory_free_mib: int, memory_used_mib: int, pcie_rx: int, pcie_tx: int,
+                 session_id: int):
         super().__init__(name, bus_id, vram_capacity_mib)
         self.timestamp = timestamp
         self.p_state = p_state  # P0 (max. pwr.) - P12 (min. pwr.)
@@ -21,6 +22,7 @@ class GPUStatusRecord(GPUInfo):
         self.memory_used_mib = memory_used_mib
         self.pcie_rx = pcie_rx  # KB/s
         self.pcie_tx = pcie_tx  # KB/s
+        self.session_id = session_id  # For DB-tracking purposes.
 
 
 class GPUStatusRecordSchema(Schema):
@@ -43,3 +45,8 @@ class GPUStatusRecordSchema(Schema):
     memory_used_mib = fields.Integer(required=True)
     pcie_rx = fields.Integer(required=True)
     pcie_tx = fields.Integer(required=True)
+    session_id = fields.Integer(required=True)
+
+    @post_load
+    def make_gpu_status_record(self, data, **kwargs):
+        return GPUStatusRecord(**data)

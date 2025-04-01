@@ -49,8 +49,17 @@ class FixedDBQuery(enum.Enum):
         memory_used_mib INTEGER NOT NULL,
         pcie_rx INTEGER NOT NULL,
         pcie_tx INTEGER NOT NULL,
-        PRIMARY KEY (gpu_id, timestamp),
-        FOREIGN KEY (gpu_id) REFERENCES gpu_info(gpu_id)
+        session_id INTEGER NOT NULL,
+        PRIMARY KEY (gpu_id, timestamp, session_id),
+        FOREIGN KEY (gpu_id) REFERENCES gpu_info(gpu_id),
+        FOREIGN KEY (session_id) REFERENCES test_session(session_id)
+    );
+    '''
+
+    CREATE_TEST_SESSION_TABLE = '''
+    CREATE TABLE IF NOT EXISTS test_session (
+     session_id INTEGER PRIMARY KEY AUTOINCREMENT,
+     is_active INTEGER NOT NULL
     );
     '''
 
@@ -69,6 +78,7 @@ class FixedDBQuery(enum.Enum):
     memory_free_mib,
     memory_used_mib,
     pcie_rx,
-    pcie_tx
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    pcie_tx,
+    session_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     '''

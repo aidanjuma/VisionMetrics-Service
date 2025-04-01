@@ -31,4 +31,4 @@ class DBConnector:
         self.execute_query(FixedDBQuery.CREATE_CPU_INFO_TABLE)
         self.execute_query(FixedDBQuery.CREATE_GPU_INFO_TABLE)
         self.execute_query(FixedDBQuery.CREATE_SYSTEM_INFO_TABLE)
-        # TODO: Other table(s).
+        self.execute_query(FixedDBQuery.CREATE_GPU_STATUS_TABLE)

@@ -3,6 +3,7 @@ from datetime import datetime
 import pynvml
 
 from models.gpu_info import GPUInfo
+from models.gpu_status_record import GPUStatusRecord
 
 # Attempt to capture information about NVIDIA GPUs using NVML:
 try:
@@ -48,20 +49,12 @@ def get_gpu_usage_info(gpus: [GPUInfo]):
         pcie_rx = pynvml.nvmlDeviceGetPcieThroughput(handle, pynvml.NVML_PCIE_UTIL_RX_BYTES)
         pcie_tx = pynvml.nvmlDeviceGetPcieThroughput(handle, pynvml.NVML_PCIE_UTIL_TX_BYTES)
 
-        data[bus_id] = {
-            'timestamp': timestamp,
-            'p_state': p_state,
-            'temperature': temperature,
-            'gpu_utilization': gpu_utilization,
-            'memory_utilization': memory_utilization,
-            'clock_sm': clock_sm,
-            'clock_memory': clock_memory,
-            'clock_graphics': clock_graphics,
-            'power_usage': power_usage,
-            'memory_free': memory_free,
-            'memory_used': memory_used,
-            'pcie_rx': pcie_rx,
-            'pcie_tx': pcie_tx,
-        }
+        gpu: GPUInfo = next(filter(lambda gpu: gpu.bus_id == bus_id, gpus), None)
+        data[bus_id] = GPUStatusRecord(name=gpu.name, bus_id=gpu.bus_id, vram_capacity_mib=gpu.vram_capacity_mib,
+                                       timestamp=timestamp, p_state=p_state, temperature=temperature,
+                                       gpu_utilization=gpu_utilization, memory_utilization=memory_utilization,
+                                       clock_sm=clock_sm, clock_memory=clock_memory, clock_graphics=clock_graphics,
+                                       power_usage=power_usage, memory_free_mib=memory_free,
+                                       memory_used_mib=memory_used, pcie_rx=pcie_rx, pcie_tx=pcie_tx)
 
     return data

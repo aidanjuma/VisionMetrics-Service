@@ -10,8 +10,7 @@ class FixedDBQuery(enum.Enum):
         cores INTEGER NOT NULL,
         frequency REAL NOT NULL,
         FOREIGN KEY (system_id) REFERENCES system_info(system_id)
-    );
-        '''
+    );'''
 
     CREATE_GPU_INFO_TABLE = '''
     CREATE TABLE IF NOT EXISTS gpu_info (
@@ -21,8 +20,7 @@ class FixedDBQuery(enum.Enum):
         model_name TEXT NOT NULL,
         vram_capacity INTEGER NOT NULL,
         FOREIGN KEY (system_id) REFERENCES system_infp(system_id)
-    );
-        '''
+    );'''
 
     CREATE_SYSTEM_INFO_TABLE = '''
     CREATE TABLE IF NOT EXISTS system_info (
@@ -30,8 +28,7 @@ class FixedDBQuery(enum.Enum):
         ram_capacity INTEGER NOT NULL,
         disk_capacity INTEGER NOT NULL,
         total_vram_capacity INTEGER NOT NULL 
-    );
-        '''
+    );'''
 
     CREATE_GPU_STATUS_TABLE = '''
     CREATE TABLE IF NOT EXISTS gpu_status (
@@ -60,8 +57,7 @@ class FixedDBQuery(enum.Enum):
     CREATE TABLE IF NOT EXISTS test_session (
      session_id INTEGER PRIMARY KEY AUTOINCREMENT,
      is_active INTEGER NOT NULL
-    );
-    '''
+    );'''
 
     WRITE_GPU_STATUS_RECORD = '''
     INSERT INTO gpu_status (
@@ -80,5 +76,4 @@ class FixedDBQuery(enum.Enum):
     pcie_rx,
     pcie_tx,
     session_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-    '''
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);'''

@@ -7,23 +7,31 @@ from enums.queries import FixedDBQuery
 class DBConnector:
     def __init__(self, db_file: str):
         self.db_file = db_file
-        self.connection: Connection | None = None
+        self.__connection: Connection | None = None
 
     def connect(self) -> Connection:
         try:
-            self.connection = sqlite3.connect(self.db_file, check_same_thread=False)
-            self.connection.row_factory = sqlite3.Row
+            self.__connection = sqlite3.connect(self.db_file, check_same_thread=False)
+            self.__connection.row_factory = sqlite3.Row
             self.__initialize_db()
         except sqlite3.Error as err:
             print(f'Error connecting to database {self.db_file}: {err}')
-        return self.connection
+        return self.__connection
+
+    def disconnect(self) -> None:
+        if self.__connection:
+            try:
+                self.__connection.close()
+                self.__connection = None
+            except sqlite3.Error as err:
+                print(f'Error disconnecting from database {self.db_file}: {err}')
 
     # TODO: Better error handling...
     def execute_query(self, query: FixedDBQuery, params: tuple = ()):
         try:
-            cursor = self.connection.cursor()
-            cursor.execute(str(query), params)
-            self.connection.commit()
+            cursor = self.__connection.cursor()
+            cursor.execute(query.value, params)
+            self.__connection.commit()
         except sqlite3.Error as err:
             print(f'Error executing query "{query}": {err}')
 

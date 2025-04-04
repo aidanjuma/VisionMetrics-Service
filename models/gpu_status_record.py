@@ -7,7 +7,7 @@ class GPUStatusRecord(GPUInfo):
     def __init__(self, name: str, bus_id: str, vram_capacity_mib: int, timestamp: str, p_state: str, temperature: int,
                  gpu_utilization: int, memory_utilization: int, clock_sm: int, clock_memory: int, clock_graphics: int,
                  power_usage: int, memory_free_mib: int, memory_used_mib: int, pcie_rx: int, pcie_tx: int,
-                 session_id: int):
+                 session_id: int | None = None):
         super().__init__(name, bus_id, vram_capacity_mib)
         self.timestamp = timestamp
         self.p_state = p_state  # P0 (max. pwr.) - P12 (min. pwr.)
@@ -45,7 +45,7 @@ class GPUStatusRecordSchema(Schema):
     memory_used_mib = fields.Integer(required=True)
     pcie_rx = fields.Integer(required=True)
     pcie_tx = fields.Integer(required=True)
-    session_id = fields.Integer(required=True)
+    session_id = fields.Integer(required=False, default=None)
 
     @post_load
     def make_gpu_status_record(self, data, **kwargs):

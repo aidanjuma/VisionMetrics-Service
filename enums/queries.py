@@ -2,6 +2,7 @@ import enum
 
 
 class FixedDBQuery(enum.Enum):
+    # -=- Table Creation -=-
     CREATE_CPU_INFO_TABLE = '''
     CREATE TABLE IF NOT EXISTS cpu_info (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,9 +56,19 @@ class FixedDBQuery(enum.Enum):
 
     CREATE_TEST_SESSION_TABLE = '''
     CREATE TABLE IF NOT EXISTS test_session (
-     session_id INTEGER PRIMARY KEY AUTOINCREMENT,
-     is_active INTEGER NOT NULL
-    );'''
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER UNIQUE,
+        is_active INTEGER NOT NULL
+    );
+    '''
+
+    # -=- Data Writing -=-
+    WRITE_SYSTEM_INFO_RECORD = '''
+        INSERT INTO system_info (
+        ram_capacity,
+        disk_capacity,
+        total_vram_capacity) VALUES (?, ?, ?);
+    '''
 
     WRITE_GPU_STATUS_RECORD = '''
     INSERT INTO gpu_status (
@@ -77,3 +88,6 @@ class FixedDBQuery(enum.Enum):
     pcie_tx,
     session_id
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);'''
+
+    # -=- Data Queries -=-
+    FIND_LATEST_SYSTEM_ID = 'SELECT MAX(system_id) as latest_system_id FROM system_info;'

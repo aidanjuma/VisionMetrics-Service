@@ -1,5 +1,6 @@
 import sqlite3
 from sqlite3 import Connection
+from typing import Any
 
 from enums.queries import FixedDBQuery
 
@@ -27,11 +28,14 @@ class DBConnector:
                 print(f'Error disconnecting from database {self.db_file}: {err}')
 
     # TODO: Better error handling...
-    def execute_query(self, query: FixedDBQuery, params: tuple = ()):
+    def execute_query(self, query: FixedDBQuery, params: tuple = (), fetch: bool = False) -> list[Any] | None:
         try:
             cursor = self.__connection.cursor()
             cursor.execute(query.value, params)
             self.__connection.commit()
+
+            if fetch:
+                return cursor.fetchall()
         except sqlite3.Error as err:
             print(f'Error executing query "{query}": {err}')
 

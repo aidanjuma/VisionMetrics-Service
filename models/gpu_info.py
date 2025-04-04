@@ -2,7 +2,7 @@ from marshmallow import Schema, fields, post_load
 
 
 class GPUInfo:
-    def __init__(self, name: str, vram_capacity_mib: int, bus_id: str | None = None):
+    def __init__(self, name: str, vram_capacity_mib: int | None = None, bus_id: str | None = None):
         self.name = name
         self.vram_capacity_mib = vram_capacity_mib
         self.bus_id = bus_id
@@ -13,7 +13,7 @@ class GPUInfo:
 
 class GPUInfoSchema(Schema):
     name = fields.String(required=True)
-    vram_capacity_mib = fields.Integer(required=True)
+    vram_capacity_mib = fields.Integer(required=False, default=None)
     bus_id = fields.String(required=False, default=None)
 
     @post_load

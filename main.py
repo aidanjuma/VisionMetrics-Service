@@ -5,6 +5,7 @@ from sqlite3 import Connection
 import db.connector as db
 from enums.queries import FixedDBQuery
 from info.collection import collect_system_info
+from models.cpu_info import CPUInfo
 from models.system_info import SystemInfo
 
 # Get CWD & data directory:
@@ -32,11 +33,20 @@ if __name__ == '__main__':
     system_info: SystemInfo = collect_system_info()
     system_info_record = (system_info.ram_capacity, system_info.disk_capacity, system_info.total_vram_capacity)
 
-    # Write static system information to disk:
+    # Write memory-relayed information to disk:
     connector.execute_query(FixedDBQuery.WRITE_SYSTEM_INFO_RECORD, system_info_record)
-    latest_system_id: int = connector.execute_query(FixedDBQuery.FIND_LATEST_SYSTEM_ID, fetch=True)[0][0]
+    latest_system_id: int = int(connector.execute_query(FixedDBQuery.FIND_LATEST_SYSTEM_ID, fetch=True)[0][0])
 
-    # TODO: Continue writing/collecting relevant data.
+    # Write CPU-related information to disk:
+    cpu_info: CPUInfo = system_info.cpu
+    cpu_info_record: tuple = (
+        latest_system_id, cpu_info.name, cpu_info.total_cores, cpu_info.min_frequency, cpu_info.max_frequency)
+    connector.execute_query(FixedDBQuery.WRITE_CPU_INFO_RECORD, cpu_info_record)
+
+    # Write GPU-related information to disk:
+    for gpu in system_info.gpus:
+        gpu_info_record: tuple = (latest_system_id, gpu.bus_id, gpu.name, gpu.vram_capacity_mib)
+        connector.execute_query(FixedDBQuery.WRITE_GPU_INFO_RECORD, gpu_info_record)
 
     try:
         while True:

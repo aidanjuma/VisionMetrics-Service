@@ -9,7 +9,8 @@ class FixedDBQuery(enum.Enum):
         system_id INTEGER NOT NULL,
         model_name TEXT NOT NULL,
         cores INTEGER NOT NULL,
-        frequency REAL NOT NULL,
+        min_frequency REAL NOT NULL,
+        max_frequency REAL NOT NULL,
         FOREIGN KEY (system_id) REFERENCES system_info(system_id)
     );'''
 
@@ -17,10 +18,10 @@ class FixedDBQuery(enum.Enum):
     CREATE TABLE IF NOT EXISTS gpu_info (
         gpu_id INTEGER PRIMARY KEY AUTOINCREMENT,
         system_id INTEGER NOT NULL,
-        bus_id TEXT NOT NULL,
+        bus_id TEXT,
         model_name TEXT NOT NULL,
-        vram_capacity INTEGER NOT NULL,
-        FOREIGN KEY (system_id) REFERENCES system_infp(system_id)
+        vram_capacity_mib INTEGER,
+        FOREIGN KEY (system_id) REFERENCES system_info(system_id)
     );'''
 
     CREATE_SYSTEM_INFO_TABLE = '''
@@ -28,7 +29,7 @@ class FixedDBQuery(enum.Enum):
         system_id INTEGER PRIMARY KEY AUTOINCREMENT,
         ram_capacity INTEGER NOT NULL,
         disk_capacity INTEGER NOT NULL,
-        total_vram_capacity INTEGER NOT NULL 
+        total_vram_capacity_mib INTEGER
     );'''
 
     CREATE_GPU_STATUS_TABLE = '''
@@ -64,29 +65,49 @@ class FixedDBQuery(enum.Enum):
 
     # -=- Data Writing -=-
     WRITE_SYSTEM_INFO_RECORD = '''
-        INSERT INTO system_info (
+    INSERT INTO system_info (
         ram_capacity,
         disk_capacity,
-        total_vram_capacity) VALUES (?, ?, ?);
+        total_vram_capacity_mib
+    ) VALUES (?, ?, ?);
+    '''
+
+    WRITE_CPU_INFO_RECORD = '''
+    INSERT INTO cpu_info (
+        system_id,
+        model_name,
+        cores,
+        min_frequency,
+        max_frequency
+    ) VALUES (?, ?, ?, ?, ?);
+    '''
+
+    WRITE_GPU_INFO_RECORD = '''
+    INSERT INTO gpu_info (
+        system_id,
+        bus_id,
+        model_name,
+        vram_capacity_mib
+    ) VALUES (?, ?, ?, ?);
     '''
 
     WRITE_GPU_STATUS_RECORD = '''
     INSERT INTO gpu_status (
-    gpu_id,
-    timestamp,
-    p_state,
-    temperature,
-    gpu_utilization,
-    memory_utilization,
-    clock_sm,
-    clock_memory,
-    clock_graphics,
-    power_usage,
-    memory_free_mib,
-    memory_used_mib,
-    pcie_rx,
-    pcie_tx,
-    session_id
+        gpu_id,
+        timestamp,
+        p_state,
+        temperature,
+        gpu_utilization,
+        memory_utilization,
+        clock_sm,
+        clock_memory,
+        clock_graphics,
+        power_usage,
+        memory_free_mib,
+        memory_used_mib,
+        pcie_rx,
+        pcie_tx,
+        session_id
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);'''
 
     # -=- Data Queries -=-

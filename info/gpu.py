@@ -60,11 +60,11 @@ def get_gpu_info() -> [GPUInfo]:
                         continue
 
                     name = device.name.strip()
-                    vram_capacity = -1  # Unknown capacity for non-NVIDIA GPUs.
+                    vram_capacity_mib = None  # Unknown capacity for non-NVIDIA GPUs.
 
                     # In the case that a GPU was accounted for more than once, do not add to list.
                     if not any(gpu.name == name for gpu in gpu_list):
-                        gpu_list.append(GPUInfo(name=name, vram_capacity_mib=vram_capacity))
+                        gpu_list.append(GPUInfo(name=name, vram_capacity_mib=None))
 
         except Exception as err:
             print('Error retrieving GPU info using OpenCL via pyopencl:', err)

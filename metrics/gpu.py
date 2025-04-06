@@ -28,32 +28,67 @@ def get_gpu_usage_info(gpus: [GPUInfo]) -> list[GPUStatusRecord] | None:
         timestamp = datetime.now().isoformat(timespec='milliseconds')
 
         # Get current power-state for the GPU:
-        p_state = pynvml.nvmlDeviceGetPowerState(handle)
+        try:
+            p_state = pynvml.nvmlDeviceGetPowerState(handle)
+        except pynvml.NVMLError:
+            p_state = None
 
         # Get current GPU core temperature:
-        temperature = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+        try:
+            temperature = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+        except pynvml.NVMLError:
+            temperature = None
 
         # Get current core & memory utilization %s:
-        utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
-        gpu_utilization = utilization.gpu
-        memory_utilization = utilization.memory
+        try:
+            utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
+            gpu_utilization = utilization.gpu
+            memory_utilization = utilization.memory
+        except pynvml.NVMLError:
+            gpu_utilization = None
+            memory_utilization = None
 
         # Get current clock information for SM, memory & core:
-        clock_sm = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_SM)
-        clock_memory = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_MEM)
-        clock_graphics = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_GRAPHICS)
+        try:
+            clock_sm = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_SM)
+        except pynvml.NVMLError:
+            clock_sm = None
+
+        try:
+            clock_memory = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_MEM)
+        except pynvml.NVMLError:
+            clock_memory = None
+
+        try:
+            clock_graphics = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_GRAPHICS)
+        except pynvml.NVMLError:
+            clock_graphics = None
 
         # Get power usage (in Watts, W):
-        power_usage = pynvml.nvmlDeviceGetPowerUsage(handle)
+        try:
+            power_usage = pynvml.nvmlDeviceGetPowerUsage(handle)
+        except pynvml.NVMLError:
+            power_usage = None
 
         # Get memory usage information:
-        memory_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        memory_free = memory_info.free // (1024 ** 2)
-        memory_used = memory_info.used // (1024 ** 2)
+        try:
+            memory_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            memory_free = memory_info.free // (1024 ** 2)
+            memory_used = memory_info.used // (1024 ** 2)
+        except pynvml.NVMLError:
+            memory_free = None
+            memory_used = None
 
         # Get PCIE throughput information:
-        pcie_rx = pynvml.nvmlDeviceGetPcieThroughput(handle, pynvml.NVML_PCIE_UTIL_RX_BYTES)
-        pcie_tx = pynvml.nvmlDeviceGetPcieThroughput(handle, pynvml.NVML_PCIE_UTIL_TX_BYTES)
+        try:
+            pcie_rx = pynvml.nvmlDeviceGetPcieThroughput(handle, pynvml.NVML_PCIE_UTIL_RX_BYTES)
+        except pynvml.NVMLError:
+            pcie_rx = None
+
+        try:
+            pcie_tx = pynvml.nvmlDeviceGetPcieThroughput(handle, pynvml.NVML_PCIE_UTIL_TX_BYTES)
+        except pynvml.NVMLError:
+            pcie_tx = None
 
         record = GPUStatusRecord(
             name=gpu.name,

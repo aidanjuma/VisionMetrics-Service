@@ -8,7 +8,7 @@ class GPUStatusRecord(GPUInfo):
                  gpu_utilization: int, memory_utilization: int, clock_sm: int, clock_memory: int, clock_graphics: int,
                  power_usage: int, memory_free_mib: int, memory_used_mib: int, pcie_rx: int, pcie_tx: int,
                  session_id: int | None = None, vram_capacity_mib: int | None = None, bus_id: str | None = None):
-        super().__init__(name, bus_id, vram_capacity_mib)
+        super().__init__(name, vram_capacity_mib, bus_id)
         self.timestamp = timestamp
         self.p_state = p_state  # P0 (max. pwr.) - P12 (min. pwr.)
         self.temperature = temperature  # in deg. C.

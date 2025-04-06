@@ -65,10 +65,15 @@ if __name__ == '__main__':
         while True:
             status_records: [GPUStatusRecord] = metrics.gpu.get_gpu_usage_info(gpus)
 
+            if status_records is None:
+                print('No NVIDIA GPU handles could be found via NVML. Exiting...')
+                exit(1)
+
             # Write GPUStatusRecord information to DB:
             for record in status_records:
+                gpu_id = connector.execute_query(FixedDBQuery.FIND_GPU_ID_FROM_BUS_ID, record.bus_id)
                 status_record = (
-                    record.gpu_id, record.timestamp, record.p_state, record.temperature, record.gpu_utilization,
+                    gpu_id, record.timestamp, record.p_state, record.temperature, record.gpu_utilization,
                     record.memory_utilization, record.clock_sm, record.clock_memory, record.clock_graphics,
                     record.power_usage, record.memory_free_mib, record.memory_used_mib, record.pcie_rx, record.pcie_tx,
                     record.session_id)

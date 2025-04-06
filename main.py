@@ -71,7 +71,8 @@ if __name__ == '__main__':
 
             # Write GPUStatusRecord information to DB:
             for record in status_records:
-                gpu_id = connector.execute_query(FixedDBQuery.FIND_GPU_ID_FROM_BUS_ID, record.bus_id)
+                gpu_id = connector.execute_query(FixedDBQuery.FIND_GPU_ID_FROM_BUS_ID,
+                                                 (record.bus_id,), fetch=True)[0][0]
                 status_record = (
                     gpu_id, record.timestamp, record.p_state, record.temperature, record.gpu_utilization,
                     record.memory_utilization, record.clock_sm, record.clock_memory, record.clock_graphics,

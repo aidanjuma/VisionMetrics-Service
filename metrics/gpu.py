@@ -12,7 +12,7 @@ except pynvml.NVMLError as err:
     print('Failed to initialize NVML via pynvml: ', err)
 
 
-def get_gpu_usage_info(gpus: [GPUInfo]):
+def get_gpu_usage_info(gpus: [GPUInfo]) -> [GPUStatusRecord]:
     # Get handle for each GPU, as found by its PCI Bus ID:
     handles = {bus_id: pynvml.nvmlDeviceGetHandleByPciBusId(bus_id) for bus_id in gpus if bus_id is not None}
 
@@ -57,4 +57,4 @@ def get_gpu_usage_info(gpus: [GPUInfo]):
                                        power_usage=power_usage, memory_free_mib=memory_free,
                                        memory_used_mib=memory_used, pcie_rx=pcie_rx, pcie_tx=pcie_tx)
 
-    return data
+    return data.values()

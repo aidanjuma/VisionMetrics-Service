@@ -63,6 +63,8 @@ if __name__ == '__main__':
 
     try:
         while True:
+            # Find session_id for the active test session (if any):
+            session_id_result: list | None = connector.execute_query(FixedDBQuery.FIND_ACTIVE_SESSION_ID, fetch=True)
             status_records: [GPUStatusRecord] = metrics.gpu.get_gpu_usage_info(gpus)
 
             if status_records is None:
@@ -71,6 +73,9 @@ if __name__ == '__main__':
 
             # Write GPUStatusRecord information to DB:
             for record in status_records:
+                # Assign session_id (if applicable):
+                record.session_id = int(session_id_result[0][0]) if session_id_result is not None else None
+
                 gpu_id = connector.execute_query(FixedDBQuery.FIND_GPU_ID_FROM_BUS_ID,
                                                  (record.bus_id,), fetch=True)[0][0]
                 status_record = (

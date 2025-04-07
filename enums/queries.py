@@ -118,4 +118,4 @@ class FixedDBQuery(enum.Enum):
     # -=- Data Queries -=-
     FIND_LATEST_SYSTEM_ID = 'SELECT MAX(system_id) as latest_system_id FROM system_info;'
     FIND_GPU_ID_FROM_BUS_ID = 'SELECT gpu_id FROM gpu_info WHERE bus_id = ?;'
-    FIND_ACTIVE_SESSION_ID = 'SELECT session_id FROM test_session WHERE is_active = 1;'
+    FIND_ACTIVE_SESSION_ID = 'SELECT id FROM test_session WHERE is_active = 1;'

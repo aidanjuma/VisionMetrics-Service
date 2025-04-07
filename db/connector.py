@@ -35,7 +35,8 @@ class DBConnector:
             self.__connection.commit()
 
             if fetch:
-                return cursor.fetchall()
+                results = cursor.fetchall()
+                return results if results or results != [] else None
         except sqlite3.Error as err:
             print(f'Error executing query "{query}": {err}')
 

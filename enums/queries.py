@@ -53,6 +53,8 @@ class FixedDBQuery(enum.Enum):
         pcie_rx INTEGER,
         pcie_tx INTEGER,
         session_id INTEGER,
+        system_ram_used_mib INTEGER,
+        system_ram_used_percentage INTEGER,
         FOREIGN KEY (gpu_id) REFERENCES gpu_info(gpu_id),
         FOREIGN KEY (session_id) REFERENCES test_session(id)
     );
@@ -111,8 +113,10 @@ class FixedDBQuery(enum.Enum):
         memory_used_mib,
         pcie_rx,
         pcie_tx,
-        session_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        session_id,
+        system_ram_used_mib,
+        system_ram_used_percentage
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     '''
 
     # -=- Data Queries -=-

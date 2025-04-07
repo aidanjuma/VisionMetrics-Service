@@ -54,15 +54,16 @@ class FixedDBQuery(enum.Enum):
         pcie_tx INTEGER,
         session_id INTEGER,
         FOREIGN KEY (gpu_id) REFERENCES gpu_info(gpu_id),
-        FOREIGN KEY (session_id) REFERENCES test_session(session_id)
+        FOREIGN KEY (session_id) REFERENCES test_session(id)
     );
     '''
 
     CREATE_TEST_SESSION_TABLE = '''
     CREATE TABLE IF NOT EXISTS test_session (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id INTEGER UNIQUE,
-        is_active INTEGER NOT NULL
+        start_timestamp TEXT NOT NULL,
+        end_timestamp TEXT,
+        is_active INTEGER GENERATED ALWAYS AS (CASE WHEN end_timestamp IS NULL THEN 1 ELSE 0 END) STORED
     );
     '''
 
@@ -117,3 +118,4 @@ class FixedDBQuery(enum.Enum):
     # -=- Data Queries -=-
     FIND_LATEST_SYSTEM_ID = 'SELECT MAX(system_id) as latest_system_id FROM system_info;'
     FIND_GPU_ID_FROM_BUS_ID = 'SELECT gpu_id FROM gpu_info WHERE bus_id = ?;'
+    FIND_ACTIVE_SESSION_ID = 'SELECT session_id FROM test_session WHERE is_active = 1;'

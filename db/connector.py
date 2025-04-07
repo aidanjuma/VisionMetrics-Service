@@ -44,3 +44,4 @@ class DBConnector:
         self.execute_query(FixedDBQuery.CREATE_GPU_INFO_TABLE)
         self.execute_query(FixedDBQuery.CREATE_SYSTEM_INFO_TABLE)
         self.execute_query(FixedDBQuery.CREATE_GPU_STATUS_TABLE)
+        self.execute_query(FixedDBQuery.CREATE_TEST_SESSION_TABLE)

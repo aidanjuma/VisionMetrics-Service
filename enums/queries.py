@@ -64,12 +64,23 @@ class FixedDBQuery(enum.Enum):
     CREATE_USE_CASE_TABLE = '''
     CREATE TABLE IF NOT EXISTS use_case (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        test_session_id INTEGER NOT NULL,
+        position_in_queue INTEGER NOT NULL,
         script_filename TEXT NOT NULL,
         sha256_checksum TEXT NOT NULL,
         start_timestamp TEXT,
         end_timestamp TEXT,
-        is_active INTEGER GENERATED ALWAYS AS (CASE WHEN end_timestamp IS NULL THEN 0 ELSE 1 END) STORED
+        is_active INTEGER GENERATED ALWAYS AS (CASE WHEN end_timestamp IS NULL THEN 0 ELSE 1 END) STORED,
+        FOREIGN KEY (test_session_id) REFERENCES test_session(id)
     );
+
+    CREATE TRIGGER IF NOT EXISTS set_position_in_queue
+    BEFORE INSERT ON use_case
+    BEGIN
+        SELECT COALESCE(MAX(position_in_queue), 0) + 1 INTO NEW.position_in_queue
+        FROM use_case
+        WHERE test_session_id = NEW.test_session_id;
+    END;
     '''
 
     # Written to by backend...

@@ -60,6 +60,19 @@ class FixedDBQuery(enum.Enum):
     );
     '''
 
+    # Written to by backend...
+    CREATE_USE_CASE_TABLE = '''
+    CREATE TABLE IF NOT EXISTS use_case (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        script_filename TEXT NOT NULL,
+        sha256_checksum TEXT NOT NULL,
+        start_timestamp TEXT,
+        end_timestamp TEXT,
+        is_active INTEGER GENERATED ALWAYS AS (CASE WHEN end_timestamp IS NULL THEN 1 ELSE 0 END) STORED
+    );
+    '''
+
+    # Written to by backend...
     CREATE_TEST_SESSION_TABLE = '''
     CREATE TABLE IF NOT EXISTS test_session (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

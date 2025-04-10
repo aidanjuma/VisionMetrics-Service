@@ -73,7 +73,9 @@ class FixedDBQuery(enum.Enum):
         is_active INTEGER GENERATED ALWAYS AS (CASE WHEN end_timestamp IS NULL THEN 0 ELSE 1 END) STORED,
         FOREIGN KEY (test_session_id) REFERENCES test_session(id)
     );
+    '''
 
+    CREATE_USE_CASE_TRIGGER = '''
     CREATE TRIGGER IF NOT EXISTS set_position_in_queue
     BEFORE INSERT ON use_case
     BEGIN

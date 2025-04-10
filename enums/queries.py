@@ -68,7 +68,7 @@ class FixedDBQuery(enum.Enum):
         sha256_checksum TEXT NOT NULL,
         start_timestamp TEXT,
         end_timestamp TEXT,
-        is_active INTEGER GENERATED ALWAYS AS (CASE WHEN end_timestamp IS NULL THEN 1 ELSE 0 END) STORED
+        is_active INTEGER GENERATED ALWAYS AS (CASE WHEN end_timestamp IS NULL THEN 0 ELSE 1 END) STORED
     );
     '''
 
@@ -78,7 +78,7 @@ class FixedDBQuery(enum.Enum):
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         start_timestamp TEXT NOT NULL,
         end_timestamp TEXT,
-        is_active INTEGER GENERATED ALWAYS AS (CASE WHEN end_timestamp IS NULL THEN 1 ELSE 0 END) STORED
+        is_active INTEGER GENERATED ALWAYS AS (CASE WHEN end_timestamp IS NULL THEN 0 ELSE 1 END) STORED,
     );
     '''
 

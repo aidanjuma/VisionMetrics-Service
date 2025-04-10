@@ -64,8 +64,8 @@ class FixedDBQuery(enum.Enum):
     CREATE_USE_CASE_TABLE = '''
     CREATE TABLE IF NOT EXISTS use_case (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        test_session_id INTEGER NOT NULL,
-        position_in_queue INTEGER NOT NULL,
+        test_session_id INTEGER,
+        position_in_queue INTEGER,
         script_filename TEXT NOT NULL,
         sha256_checksum TEXT NOT NULL,
         start_timestamp TEXT,

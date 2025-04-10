@@ -77,13 +77,17 @@ class FixedDBQuery(enum.Enum):
 
     CREATE_USE_CASE_TRIGGER = '''
     CREATE TRIGGER IF NOT EXISTS set_position_in_queue
-    BEFORE INSERT ON use_case
+    AFTER INSERT ON use_case
+    FOR EACH ROW
+    WHEN NEW.position_in_queue IS NULL
     BEGIN
-        NEW.position_in_queue = (
+        UPDATE use_case
+        SET position_in_queue = (
             SELECT COALESCE(MAX(position_in_queue), 0) + 1
             FROM use_case
-            WHERE test_session_id = NEW.test_session_id
-        );
+            WHERE test_session_id = NEW.test_session_id AND id != NEW.id
+        )
+        WHERE id = NEW.id;
     END;
     '''
 

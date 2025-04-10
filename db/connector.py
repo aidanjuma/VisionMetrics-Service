@@ -47,4 +47,4 @@ class DBConnector:
         self.execute_query(FixedDBQuery.CREATE_GPU_STATUS_TABLE)
         self.execute_query(FixedDBQuery.CREATE_TEST_SESSION_TABLE)
         self.execute_query(FixedDBQuery.CREATE_USE_CASE_TABLE)
-        self.execute_query(FixedDBQuery.CREATE_USE_CASE_TRIGGER)
+        self.execute_query(FixedDBQuery.UPDATE_USE_CASE_POSITION_IN_QUEUE_ON_TEST_SESSION_ASSIGNMENT)

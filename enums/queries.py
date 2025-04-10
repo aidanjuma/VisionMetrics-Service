@@ -75,11 +75,12 @@ class FixedDBQuery(enum.Enum):
     );
     '''
 
-    CREATE_USE_CASE_TRIGGER = '''
-    CREATE TRIGGER IF NOT EXISTS set_position_in_queue
-    AFTER INSERT ON use_case
+    UPDATE_USE_CASE_POSITION_IN_QUEUE_ON_TEST_SESSION_ASSIGNMENT = '''
+    CREATE TRIGGER IF NOT EXISTS update_position_on_test_session_change
+    AFTER UPDATE OF test_session_id ON use_case
     FOR EACH ROW
-    WHEN NEW.position_in_queue IS NULL
+    WHEN (NEW.test_session_id IS NOT OLD.test_session_id) OR 
+         (NEW.test_session_id IS NOT NULL AND OLD.test_session_id IS NULL)
     BEGIN
         UPDATE use_case
         SET position_in_queue = (

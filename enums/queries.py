@@ -98,7 +98,9 @@ class FixedDBQuery(enum.Enum):
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         start_timestamp TEXT NOT NULL,
         end_timestamp TEXT,
-        is_active INTEGER GENERATED ALWAYS AS (CASE WHEN end_timestamp IS NULL THEN 0 ELSE 1 END) STORED
+        is_paused INTEGER DEFAULT 0,
+        is_active INTEGER GENERATED ALWAYS AS (CASE WHEN end_timestamp IS NULL THEN 0 ELSE 1 END) STORED,
+        active_time_ms INTEGER,
     );
     '''
 

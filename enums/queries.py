@@ -104,6 +104,17 @@ class FixedDBQuery(enum.Enum):
     );
     '''
 
+    # Written to by backend...
+    CREATE_SESSION_EVENT_TABLE = '''
+    CREATE TABLE IF NOT EXISTS session_event (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL,
+        event_type TEXT NOT NULL CHECK(event_type IN ('PAUSE', 'RESUME')),
+        timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now')),
+        FOREIGN KEY (session_id) REFERENCES test_session(id)
+    );
+    '''
+
     # -=- Data Writing -=-
     WRITE_SYSTEM_INFO_RECORD = '''
     INSERT INTO system_info (

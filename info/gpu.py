@@ -1,5 +1,5 @@
 import pynvml
-
+from typing import List
 from models.gpu_info import GPUInfo
 
 try:
@@ -8,7 +8,7 @@ except ImportError:
     cl = None
 
 
-def get_gpu_info() -> [GPUInfo]:
+def get_gpu_info() -> List[GPUInfo]:
     gpu_list = []
     skip_nvml = False
 
@@ -29,7 +29,8 @@ def get_gpu_info() -> [GPUInfo]:
 
                     # Get name of device, decoding if required:
                     raw_name = pynvml.nvmlDeviceGetName(handle)
-                    name = raw_name.decode('utf-8') if isinstance(raw_name, bytes) else raw_name
+                    name = raw_name.decode(
+                        'utf-8') if isinstance(raw_name, bytes) else raw_name
 
                     # Get total VRAM, coercing MiB:
                     memory_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
@@ -37,12 +38,15 @@ def get_gpu_info() -> [GPUInfo]:
 
                     # Get bus ID for current GPU:
                     pci_info = pynvml.nvmlDeviceGetPciInfo(handle)
-                    bus_id = pci_info.busId.decode() if isinstance(pci_info.busId, bytes) else pci_info.busId
+                    bus_id = pci_info.busId.decode() if isinstance(
+                        pci_info.busId, bytes) else pci_info.busId
 
                     # Append to device list, ready for return later:
-                    gpu_list.append(GPUInfo(name=name, bus_id=bus_id, vram_capacity_mib=vram_capacity_mib))
+                    gpu_list.append(GPUInfo(name=name, physical_gpu_index=idx,
+                                    bus_id=bus_id, vram_capacity_mib=vram_capacity_mib))
                 except pynvml.NVMLError as err:
-                    print(f'Error retrieving info for GPU (index {idx}): {err}')
+                    print(
+                        f'Error retrieving info for GPU (index {idx}): {err}')
         finally:
             pynvml.nvmlShutdown()
 
@@ -62,7 +66,8 @@ def get_gpu_info() -> [GPUInfo]:
                     name = device.name.strip()
                     # In the case that a GPU was accounted for more than once, do not add to list.
                     if not any(gpu.name == name for gpu in gpu_list):
-                        gpu_list.append(GPUInfo(name=name, vram_capacity_mib=None))
+                        gpu_list.append(
+                            GPUInfo(name=name, vram_capacity_mib=None))
 
         except Exception as err:
             print('Error retrieving GPU info using OpenCL via pyopencl:', err)

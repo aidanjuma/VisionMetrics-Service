@@ -1,3 +1,4 @@
+from typing import List
 from marshmallow import Schema, fields, post_load
 
 from models.cpu_info import CPUInfo, CPUInfoSchema
@@ -5,7 +6,7 @@ from models.gpu_info import GPUInfo, GPUInfoSchema
 
 
 class SystemInfo:
-    def __init__(self, cpu: CPUInfo, gpus: [GPUInfo], ram_capacity: int, disk_capacity: int):
+    def __init__(self, cpu: CPUInfo, gpus: List[GPUInfo], ram_capacity: int, disk_capacity: int):
         self.cpu = cpu
         self.gpus = gpus
         self.ram_capacity = ram_capacity
@@ -14,7 +15,8 @@ class SystemInfo:
         if any(gpu.vram_capacity_mib is None for gpu in gpus):
             self.total_vram_capacity = None
         else:
-            self.total_vram_capacity = sum(gpu.vram_capacity_mib for gpu in gpus)
+            self.total_vram_capacity = sum(
+                gpu.vram_capacity_mib for gpu in gpus)
 
     def __repr__(self):
         return (

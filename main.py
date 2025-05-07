@@ -1,6 +1,7 @@
 import os
 import time
 from sqlite3 import Connection
+from typing import List
 
 import db.connector as db
 import metrics.gpu
@@ -53,7 +54,7 @@ if __name__ == '__main__':
 
     # Write GPU-related information to disk:
     has_nvidia_gpu = False
-    gpus: [GPUInfo] = system_info.gpus
+    gpus: List[GPUInfo] = system_info.gpus
     for gpu in gpus:
         gpu_info_record: tuple = (
             latest_system_id, gpu.bus_id, gpu.name, gpu.vram_capacity_mib)
@@ -73,8 +74,8 @@ if __name__ == '__main__':
             # Find session_id for the active test session (if any):
             session_id_result: list | None = connector.execute_query(
                 FixedDBQuery.FIND_ACTIVE_SESSION_ID, fetch=True)
-            status_records: [
-                GPUStatusRecord] = metrics.gpu.get_gpu_usage_info(gpus)
+            status_records: List[GPUStatusRecord] | None = metrics.gpu.get_gpu_usage_info(
+                gpus)
 
             # Get system RAM usage statistics:
             ram_usage_stats: tuple = metrics.memory.get_ram_usage()

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import List
 
 import pynvml
 
@@ -12,7 +13,7 @@ except pynvml.NVMLError as err:
     print('Failed to initialize NVML via pynvml: ', err)
 
 
-def get_gpu_usage_info(gpus: [GPUInfo]) -> list[GPUStatusRecord] | None:
+def get_gpu_usage_info(gpus: List[GPUInfo]) -> list[GPUStatusRecord] | None:
     # Create a list to store GPUStatusRecord objects
     records = []
 
@@ -21,7 +22,8 @@ def get_gpu_usage_info(gpus: [GPUInfo]) -> list[GPUStatusRecord] | None:
         try:
             handle = pynvml.nvmlDeviceGetHandleByPciBusId(gpu.bus_id)
         except pynvml.NVMLError as err:
-            print(f"Failed to get handle for GPU with bus_id {gpu.bus_id}: ", err)
+            print(
+                f"Failed to get handle for GPU with bus_id {gpu.bus_id}: ", err)
             continue  # Skip GPU if error occurs
 
         # Get timestamp when metrics were gathered:
@@ -35,7 +37,8 @@ def get_gpu_usage_info(gpus: [GPUInfo]) -> list[GPUStatusRecord] | None:
 
         # Get current GPU core temperature:
         try:
-            temperature = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+            temperature = pynvml.nvmlDeviceGetTemperature(
+                handle, pynvml.NVML_TEMPERATURE_GPU)
         except pynvml.NVMLError:
             temperature = None
 
@@ -50,17 +53,20 @@ def get_gpu_usage_info(gpus: [GPUInfo]) -> list[GPUStatusRecord] | None:
 
         # Get current clock information for SM, memory & core:
         try:
-            clock_sm = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_SM)
+            clock_sm = pynvml.nvmlDeviceGetClockInfo(
+                handle, pynvml.NVML_CLOCK_SM)
         except pynvml.NVMLError:
             clock_sm = None
 
         try:
-            clock_memory = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_MEM)
+            clock_memory = pynvml.nvmlDeviceGetClockInfo(
+                handle, pynvml.NVML_CLOCK_MEM)
         except pynvml.NVMLError:
             clock_memory = None
 
         try:
-            clock_graphics = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_GRAPHICS)
+            clock_graphics = pynvml.nvmlDeviceGetClockInfo(
+                handle, pynvml.NVML_CLOCK_GRAPHICS)
         except pynvml.NVMLError:
             clock_graphics = None
 
@@ -81,12 +87,14 @@ def get_gpu_usage_info(gpus: [GPUInfo]) -> list[GPUStatusRecord] | None:
 
         # Get PCIE throughput information:
         try:
-            pcie_rx = pynvml.nvmlDeviceGetPcieThroughput(handle, pynvml.NVML_PCIE_UTIL_RX_BYTES)
+            pcie_rx = pynvml.nvmlDeviceGetPcieThroughput(
+                handle, pynvml.NVML_PCIE_UTIL_RX_BYTES)
         except pynvml.NVMLError:
             pcie_rx = None
 
         try:
-            pcie_tx = pynvml.nvmlDeviceGetPcieThroughput(handle, pynvml.NVML_PCIE_UTIL_TX_BYTES)
+            pcie_tx = pynvml.nvmlDeviceGetPcieThroughput(
+                handle, pynvml.NVML_PCIE_UTIL_TX_BYTES)
         except pynvml.NVMLError:
             pcie_tx = None
 

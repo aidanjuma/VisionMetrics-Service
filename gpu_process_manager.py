@@ -1,4 +1,3 @@
-import os
 import subprocess
 import time
 from pynvml import *
@@ -223,46 +222,32 @@ class GPUProcessManager:
 
         return sorted(list(set(uuids)))
 
-    def launch_vllm_instance(self, mig_device_uuid, model_name_or_path, port,
-                             tensor_parallel_size=1, api_host='0.0.0.0', **vllm_kwargs):
+    def launch_vllm_instance(self, mig_device_uuid: str, model_name_or_path: str, port: int, tensor_parallel_size: int = 1, api_host: str = '0.0.0.0'):
         if port in self.managed_processes:
             print(f'Port {port} is already in use by a managed vLLM instance.')
             return None
-
-        env = os.environ.copy()
-        env['CUDA_VISIBLE_DEVICES'] = mig_device_uuid
-
-        # Construct vLLM command
-        # Basic command, user can pass more via vllm_kwargs
+        # Construct vLLM command:
         command = [
-            'python', '-m', 'vllm.entrypoints.openai.api_server',
+            'python3', '-m', 'vllm.entrypoints.openai.api_server',
             '--host', str(api_host),
             '--port', str(port),
             '--model', str(model_name_or_path),
             '--tensor-parallel-size', str(tensor_parallel_size)
         ]
 
-        # Add any additional vLLM arguments
-        for key, value in vllm_kwargs.items():
-            command.append(f'--{key.replace('_', '-')}')
-            command.append(str(value))
-
         log_file_out = f'vllm_port_{port}_out.log'
         log_file_err = f'vllm_port_{port}_err.log'
 
         print(
-            f'Launching vLLM on MIG UUID {mig_device_uuid}, Port {port}, Model {model_name_or_path}')
-        print(f'Command: {' '.join(command)}')
-        print(f'Output log: {log_file_out}, Error log: {log_file_err}')
+            f'Launching vLLM on MIG UUID <{mig_device_uuid}>, Port <{port}>, Model <{model_name_or_path}>')
 
         try:
-            # Using Popen for non-blocking execution
-            # Redirect stdout and stderr to log files
-            with open(log_file_out, 'wb') as fout, open(log_file_err, 'wb') as ferr:
+            # Using Popen for non-blocking execution:
+            with open(log_file_out, 'wb') as stdout, open(log_file_err, 'wb') as stderr:
                 process = subprocess.Popen(
-                    command, env=env, stdout=fout, stderr=ferr)
+                    command, stdout=stdout, stderr=stderr)
 
-            # Create and store ManagedVllmInstance object
+            # Create and store ManagedVllmInstance object:
             vllm_instance_data = ManagedVllmInstance(
                 port=port,
                 process=process,
@@ -272,7 +257,7 @@ class GPUProcessManager:
             )
             self.managed_processes[port] = vllm_instance_data
             print(
-                f'vLLM instance for port {port} started with PID {process.pid}.')
+                f'vLLM instance for port <{port}> started with PID <{process.pid}>')
             return process.pid
         except Exception as err:
             print(f'Error launching vLLM instance on port {port}: {err}')
@@ -286,35 +271,28 @@ class GPUProcessManager:
         managed_instance = self.managed_processes[port]
         process_to_terminate = managed_instance.process
         print(
-            f'Terminating vLLM instance on port {port} (PID {process_to_terminate.pid})...')
+            f'Terminating vLLM instance on port <{port} (PID <{process_to_terminate.pid}>)...')
 
         try:
-            process_to_terminate.terminate()  # Send SIGTERM
-            process_to_terminate.wait(timeout=10)  # Wait for graceful shutdown
-            print(f'vLLM instance on port {port} terminated.')
+            process_to_terminate.terminate()
+            process_to_terminate.wait(timeout=10)
+            print(f'vLLM instance on port <{port}> terminated.')
+
         except subprocess.TimeoutExpired:
             print(
-                f'vLLM instance on port {port} did not terminate gracefully, forcing kill...')
-            process_to_terminate.kill()  # Send SIGKILL
+                f'vLLM instance on port <{port}> did not terminate gracefully, forcing kill...')
+            process_to_terminate.kill()
             process_to_terminate.wait()
-            print(f'vLLM instance on port {port} killed.')
+            print(f'vLLM instance on port <{port}> killed.')
         except Exception as err:
             print(
-                f'Error during termination of vLLM PID {process_to_terminate.pid}: {err}')
+                f'Error during termination of vLLM PID <{process_to_terminate.pid}>: {err}')
             return False
+
         finally:
             del self.managed_processes[port]
-        return True
 
-    def get_vllm_instance_status(self, port):
-        if port not in self.managed_processes:
-            return 'Not managed'
-        managed_instance = self.managed_processes[port]
-        process_to_check = managed_instance.process
-        poll_status = process_to_check.poll()
-        if poll_status is None:
-            return f'Running (PID {process_to_check.pid})'
-        return f'Exited with code {poll_status} (PID {process_to_check.pid})'
+        return True
 
     def __destroy_compute_instances_on_gi(self, managed_gi: ManagedGpuInstance, gi_uuid: str):
         try:

@@ -2,7 +2,6 @@ import os
 import subprocess
 import time
 from pynvml import *
-from pynvml import NVML_GPU_INSTANCE_PROFILE_COUNT_MAX
 
 from models.gpu_info import GPUInfo
 from models.managed_gpu_instance import ManagedGpuInstance
@@ -97,7 +96,8 @@ class ProcessManager:
         # GPU supports MIG mode, so we can attempt to list the profiles.
         profiles = []
         try:
-            for idx in range(NVML_GPU_INSTANCE_PROFILE_COUNT_MAX):
+            idx = 0
+            while True:
                 # Attempt to get the profile info for the current index.
                 try:
                     profile_info = nvmlDeviceGetGpuInstanceProfileInfo(
@@ -121,6 +121,7 @@ class ProcessManager:
                     # Otherwise, log the error and continue.
                     print(
                         f'Warning: Could not get profile info for index {idx}: {err}')
+                idx += 1
 
         except NVMLError as err:
             print(f'Error listing GI profiles: {err}')
@@ -160,28 +161,27 @@ class ProcessManager:
                 f'Error creating GPU Instance with profile ID {profile_id}: {err}')
             return None
 
-    def destroy_gi(self, gi_uuid):
+    def destroy_gi(self, gi_uuid) -> bool:
+        # Check if the GI is managed by this manager; if not, return False - GI could not be destroyed.
         if gi_uuid not in self.managed_gis:
             print(
                 f'GPU Instance with UUID {gi_uuid} not managed or not found.')
-            # Try to find it if not in managed_gis, as it might have been created externally
-            # This part is more complex as it requires iterating all GIs on the GPU.
-            # For simplicity, this example only destroys GIs it created.
             return False
 
+        # Continue on to destroy the GI, since it is managed by this manager.
         managed_gi = self.managed_gis[gi_uuid]
         try:
-            # Before destroying GI, ensure any associated CIs are destroyed.
-            # This example assumes no explicit CI creation within the GI, or that CIs are auto-cleaned.
-            # For full robustness: iterate and destroy CIs on this GI first.
+            # Before destroying GI, ensure any associated CIs are destroyed:
+            self.__destroy_compute_instances_on_gi(managed_gi, gi_uuid)
+
             nvmlGpuInstanceDestroy(managed_gi.handle)
             print(f'Successfully destroyed GPU Instance UUID: {gi_uuid}')
             del self.managed_gis[gi_uuid]
+
             return True
+
         except NVMLError as err:
             print(f'Error destroying GPU Instance UUID {gi_uuid}: {err}')
-            print(
-                'Ensure the GI is not in use by any processes (including Compute Instances).')
             return False
 
     def get_all_mig_device_uuids(self):
@@ -238,7 +238,7 @@ class ProcessManager:
 
                     # Alternative: Check if 'MIG-' is prefix of UUID, which is more common for actual MIG device UUIDs
                     # nvidia-smi -L shows these UUIDs as "MIG-..."
-                    if uuid.startswith("MIG-"):
+                    if uuid.startswith('MIG-'):
                         is_mig_device_type = True
 
                     if is_mig_device_type:
@@ -351,6 +351,56 @@ class ProcessManager:
         if poll_status is None:
             return f'Running (PID {process_to_check.pid})'
         return f'Exited with code {poll_status} (PID {process_to_check.pid})'
+
+    def __destroy_compute_instances_on_gi(self, managed_gi: ManagedGpuInstance, gi_uuid: str):
+        try:
+            # Iterate through all possible CI profiles to find and destroy active CIs.
+            ci_profile_idx = 0
+            while True:
+                try:
+                    # Attempt to get CI profile info for NVML_COMPUTE_INSTANCE_ENGINE_PROFILE_SHARED profile:
+                    ci_prof_info = nvmlGpuInstanceGetComputeInstanceProfileInfo(
+                        managed_gi.handle, ci_profile_idx, NVML_COMPUTE_INSTANCE_ENGINE_PROFILE_SHARED)
+
+                    # Get count of CIs for the current profile:
+                    ci_count_for_profile = nvmlGpuInstanceGetComputeInstances(
+                        managed_gi.handle, ci_prof_info.id, 0)
+
+                    if ci_count_for_profile > 0:
+                        # If CIs exist, get their handles:
+                        ci_handles = nvmlGpuInstanceGetComputeInstances(
+                            managed_gi.handle, ci_prof_info.id, ci_count_for_profile)
+
+                        for ci_handle in ci_handles:
+                            try:
+                                print(
+                                    f'Destroying Compute Instance (handle: {ci_handle}) on GI {gi_uuid}')
+                                nvmlComputeInstanceDestroy(ci_handle)
+                            except NVMLError as ci_destroy_err:
+                                print(
+                                    f'Error destroying Compute Instance (handle: {ci_handle}) on GI {gi_uuid}: {ci_destroy_err}')
+
+                except NVMLError as err:
+                    # Break loop if profile index is invalid or no more profiles found.
+                    if err.value == NVML_ERROR_INVALID_ARGUMENT or err.value == NVML_ERROR_NOT_FOUND:
+                        break
+                    # If profile not supported by this GI, continue to next profile index.
+                    elif err.value == NVML_ERROR_NOT_SUPPORTED:
+                        ci_profile_idx += 1
+                        continue
+                    print(
+                        f'Error enumerating CI profile {ci_profile_idx} for GI {gi_uuid}: {err}')
+                    break
+
+                ci_profile_idx += 1
+
+        except NVMLError as err:
+            # Log error if iterating or destroying CIs fails.
+            print(
+                f'Could not fully iterate or destroy CIs on GI {gi_uuid} due to NVML error: {err}')
+        except Exception as err:
+            print(
+                f'An unexpected error occurred during CI cleanup for GI {gi_uuid}: {err}')
 
     def __is_mig_capable(self):
         try:

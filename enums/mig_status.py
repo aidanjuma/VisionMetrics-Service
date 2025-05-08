@@ -1,0 +1,8 @@
+from enum import Enum
+
+
+class MIGStatus(Enum):
+    NOT_SUPPORTED = 'NOT_SUPPORTED'
+    ENABLED = 'ENABLED'
+    NOT_ENABLED = 'NOT_ENABLED'
+    ERROR_CHECKING_MODE = 'ERROR_CHECKING_MODE'

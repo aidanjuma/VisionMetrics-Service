@@ -6,9 +6,10 @@ from pynvml import *
 from models.gpu_info import GPUInfo
 from models.managed_gpu_instance import ManagedGpuInstance
 from models.managed_vllm_instance import ManagedVllmInstance
+from enums.mig_status import MIGStatus
 
 
-class ProcessManager:
+class GPUProcessManager:
     def __init__(self, gpu_info: GPUInfo):
         self.gpu_info = gpu_info
         self.physical_gpu_handle = None
@@ -184,80 +185,43 @@ class ProcessManager:
             print(f'Error destroying GPU Instance UUID {gi_uuid}: {err}')
             return False
 
-    def get_all_mig_device_uuids(self):
-        '''Lists UUIDs of all active MIG devices (GIs/CIs) visible to CUDA.'''
+    def get_all_mig_device_uuids(self) -> list[str] | None:
+        # Lists UUIDs of all active MIG 'devices' on this GPU.
+        if not self.physical_gpu_handle:
+            print(
+                f'[{self.gpu_info.bus_id if self.gpu_info else 'Unknown GPU'}] Error: Physical GPU handle not initialized.')
+            return None
+
+        # Get the parent GPU's bus ID and UUID:
+        parent_gpu_bus_id, parent_physical_gpu_uuid = self.__get_parent_gpu_details()
+        if not parent_gpu_bus_id or not parent_physical_gpu_uuid:
+            return None
+
+        # Check the MIG status of the parent GPU:
+        mig_status = self.__check_and_log_mig_status(parent_gpu_bus_id)
+        if mig_status == MIGStatus.NOT_SUPPORTED:
+            return None
+
         uuids = []
         try:
-            # This method of iterating all devices and checking their UUID might be complex
-            # if we only care about MIG devices from the *managed* physical GPU.
-            # The original code iterated all nvmlDeviceGetCount() devices.
-            # For now, let's assume we might need to see all system-wide MIG UUIDs.
-            # If this needs to be scoped to MIG devices *on this specific physical_gpu_handle*,
-            # the logic to discover them would need to be more targeted, perhaps using
-            # nvmlDeviceGetMigDeviceHandleByIndex within a loop on the parent physical_gpu_handle.
-
-            # The previous heuristic: 'MIG' in uuid or idx >= nvmlDeviceGetMaxMigDeviceCount(self.physical_gpu_handle)
-            # This needs self.physical_gpu_handle which is correct.
-
-            # Let's try to get Max MIG device count on the specific physical GPU
-            # to help identify potential MIG devices.
-            max_mig_devices_on_this_gpu = 0
-            try:
-                max_mig_devices_on_this_gpu = nvmlDeviceGetMaxMigDeviceCount(
-                    self.physical_gpu_handle)
-            except NVMLError:  # Potentially not MIG capable or other issue
-                pass
-
-            device_count = nvmlDeviceGetCount()
-            for idx in range(device_count):
-                handle = nvmlDeviceGetHandleByIndex(idx)
-                try:
-                    uuid = nvmlDeviceGetUUID(handle).decode()
-                    # Refined Heuristic:
-                    # A device is a MIG device if:
-                    # 1. 'MIG' is in its UUID (common convention for MIG device UUIDs)
-                    # OR
-                    # 2. It's a handle that NVML considers a MIG device.
-                    #    We can check this by trying a MIG-specific call that fails on non-MIG devices
-                    #    or succeeds/fails characteristically on MIG device handles.
-                    #    For instance, nvmlDeviceGetMigMode fails on an actual MIG *device* handle
-                    #    with NVML_ERROR_NOT_SUPPORTED or NVML_ERROR_INVALID_ARGUMENT because
-                    #    MIG mode is a property of the parent physical GPU, not the MIG device itself.
-
-                    is_mig_device_type = False
-                    try:
-                        # This call is expected to fail on a MIG device handle.
-                        nvmlDeviceGetMigMode(handle)
-                    except NVMLError as e_mig_check:
-                        if e_mig_check.value == NVML_ERROR_NOT_SUPPORTED or e_mig_check.value == NVML_ERROR_INVALID_ARGUMENT:
-                            # This suggests 'handle' could be a MIG device handle.
-                            # Further check: ensure this MIG device belongs to our managed physical GPU.
-                            # This is tricky. For now, we'll keep the broader check.
-                            # A robust way would be to get parent GPU of this MIG device and match its UUID/bus_id.
-                            is_mig_device_type = True
-
-                    # Alternative: Check if 'MIG-' is prefix of UUID, which is more common for actual MIG device UUIDs
-                    # nvidia-smi -L shows these UUIDs as "MIG-..."
-                    if uuid.startswith('MIG-'):
-                        is_mig_device_type = True
-
-                    if is_mig_device_type:
-                        uuids.append(uuid)
-
-                except NVMLError:  # Skip devices that can't get UUID or other issues
-                    continue
+            uuids = self.__enumerate_mig_children_uuids(
+                parent_gpu_bus_id, parent_physical_gpu_uuid)
         except NVMLError as err:
-            print(f'Error enumerating device UUIDs: {err}')
+            log_error_gpu_id = parent_gpu_bus_id or \
+                (self.gpu_info.bus_id if self.gpu_info else 'Unknown GPU')
+            print(f'[{log_error_gpu_id}] Critical NVMLError during MIG device enumeration: {err}. '
+                  'Cannot reliably list MIG devices.')
+            return None
 
-        # If no MIG devices found this way, rely on created GI UUIDs from *this* manager
-        if not uuids and self.managed_gis:
-            print('Could not auto-discover MIG device UUIDs for CUDA_VISIBLE_DEVICES, using managed GI UUIDs as fallback.')
-            # These are GIs created on the current physical GPU
-            return list(self.managed_gis.keys())
         if not uuids:
-            print(
-                'No MIG devices found. Ensure GIs/CIs are created and MIG mode is active on the target GPU.')
-        return uuids
+            fallback_uuids = self.__get_fallback_uuids(parent_gpu_bus_id)
+            if fallback_uuids is not None:
+                return fallback_uuids
+
+        # Reached if enumeration found nothing AND fallback also found nothing/no fallback available.
+        print(f'[{parent_gpu_bus_id}] No MIG devices (GIs/CIs) found for this GPU (UUID: {parent_physical_gpu_uuid}).')
+
+        return sorted(list(set(uuids)))
 
     def launch_vllm_instance(self, mig_device_uuid, model_name_or_path, port,
                              tensor_parallel_size=1, api_host='0.0.0.0', **vllm_kwargs):
@@ -415,6 +379,79 @@ class ProcessManager:
             print(
                 f'Could not definitively determine MIG capability due to NVML error: {err}. Assuming not capable.')
             return False
+
+    def __get_parent_gpu_details(self) -> tuple[str | None, str | None]:
+        '''Retrieves PCI bus ID and UUID for the physical GPU of this manager instance.'''
+        try:
+            parent_pci_info = nvmlDeviceGetPciInfo(self.physical_gpu_handle)
+            bus_id = parent_pci_info.busId.decode('utf-8')
+            uuid = nvmlDeviceGetUUID(self.physical_gpu_handle).decode('utf-8')
+            return bus_id, uuid
+        except NVMLError as err:
+            error_source_gpu_id = self.gpu_info.bus_id if self.gpu_info else 'Unknown GPU (handle exists)'
+            print(
+                f'[{error_source_gpu_id}] NVMLError while retrieving parent GPU details: {err}.')
+            return None, None
+
+    def __check_and_log_mig_status(self, parent_gpu_bus_id: str) -> MIGStatus:
+        '''Checks and logs MIG capability and status for the parent GPU.'''
+        if not self.__is_mig_capable():
+            print(
+                f'[{parent_gpu_bus_id}] This GPU does not support MIG mode. Cannot list MIG devices.')
+            return MIGStatus.NOT_SUPPORTED
+
+        # Check if MIG mode is enabled:
+        try:
+            current_mode, _ = nvmlDeviceGetMigMode(self.physical_gpu_handle)
+            if current_mode != NVML_DEVICE_MIG_ENABLE:
+                print(
+                    f'[{parent_gpu_bus_id}] MIG mode is not currently enabled on this GPU.')
+                return MIGStatus.NOT_ENABLED
+            return MIGStatus.ENABLED
+
+        # If we can't check MIG mode, assume it is enabled and continue.
+        except NVMLError as mig_error:
+            print(
+                f'[{parent_gpu_bus_id}] Warning: Could not determine MIG mode due to NVML error: {mig_error}.')
+            return MIGStatus.ERROR_CHECKING_MODE
+
+    def __enumerate_mig_children_uuids(self, parent_gpu_bus_id: str, parent_physical_gpu_uuid: str) -> list[str]:
+        '''Enumerates NVML devices and filters for MIG children of the specified parent GPU.'''
+        discovered_uuids = []
+        device_count = nvmlDeviceGetCount()
+
+        for idx in range(device_count):
+            handle = nvmlDeviceGetHandleByIndex(
+                idx)
+            try:
+                current_device_pci_info = nvmlDeviceGetPciInfo(handle)
+                current_device_bus_id = current_device_pci_info.busId.decode(
+                    'utf-8')
+                current_device_uuid = nvmlDeviceGetUUID(handle).decode('utf-8')
+
+                # If the current device ID is the parent GPU's ID, check if it is a MIG child.
+                if current_device_bus_id == parent_gpu_bus_id:
+                    if current_device_uuid != parent_physical_gpu_uuid and \
+                       current_device_uuid.startswith('MIG-'):
+                        if current_device_uuid not in discovered_uuids:
+                            discovered_uuids.append(current_device_uuid)
+            except NVMLError:
+                continue
+
+        return discovered_uuids
+
+    def __get_fallback_uuids(self, parent_gpu_bus_id_for_log: str) -> list[str] | None:
+        '''Returns sorted list of managed GI UUIDs if enumeration found none, else None.'''
+        if self.managed_gis:
+            log_gpu_id = parent_gpu_bus_id_for_log or \
+                (self.gpu_info.bus_id if self.gpu_info else 'Unknown GPU')
+
+            print(
+                f'[{log_gpu_id}] No MIG devices auto-discovered via system enumeration for this GPU.')
+
+            return sorted(list(self.managed_gis.keys()))
+
+        return None
 
     def __cleanup(self, destroy_created_gis=True):
         # Terminate all managed vLLM processes:

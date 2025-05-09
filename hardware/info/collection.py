@@ -1,6 +1,6 @@
-from info.cpu import get_cpu_info
-from info.gpu import get_gpu_info
-from info.memory import get_ram_capacity_gib, get_disk_capacity_gib
+from hardware.info.cpu import get_cpu_info
+from hardware.info.gpu import get_gpu_info
+from hardware.info.memory import get_ram_capacity_gib, get_disk_capacity_gib
 from models.cpu_info import CPUInfo
 from models.gpu_info import GPUInfo
 from models.system_info import SystemInfo

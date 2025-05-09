@@ -1,5 +1,7 @@
-import pynvml
 from typing import List
+
+import pynvml
+
 from models.gpu_info import GPUInfo
 
 try:
@@ -43,7 +45,7 @@ def get_gpu_info() -> List[GPUInfo]:
 
                     # Append to device list, ready for return later:
                     gpu_list.append(GPUInfo(name=name, physical_gpu_index=idx,
-                                    bus_id=bus_id, vram_capacity_mib=vram_capacity_mib))
+                                            bus_id=bus_id, vram_capacity_mib=vram_capacity_mib))
                 except pynvml.NVMLError as err:
                     print(
                         f'Error retrieving info for GPU (index {idx}): {err}')

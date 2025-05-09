@@ -1,4 +1,5 @@
 from typing import List
+
 from marshmallow import Schema, fields, post_load
 
 from models.cpu_info import CPUInfo, CPUInfoSchema

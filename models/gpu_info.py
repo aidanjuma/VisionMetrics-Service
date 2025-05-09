@@ -2,7 +2,8 @@ from marshmallow import Schema, fields, post_load
 
 
 class GPUInfo:
-    def __init__(self, name: str, physical_gpu_index: int | None = None, vram_capacity_mib: int | None = None, bus_id: str | None = None):
+    def __init__(self, name: str, physical_gpu_index: int | None = None, vram_capacity_mib: int | None = None,
+                 bus_id: str | None = None):
         self.name = name
         self.physical_gpu_index = physical_gpu_index
         self.vram_capacity_mib = vram_capacity_mib

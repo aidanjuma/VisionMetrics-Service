@@ -1,14 +1,15 @@
 import subprocess
 import time
+
 from pynvml import *
 
+from enums.mig_status import MIGStatus
 from models.gpu_info import GPUInfo
 from models.managed_gpu_instance import ManagedGpuInstance
 from models.managed_vllm_instance import ManagedVllmInstance
-from enums.mig_status import MIGStatus
 
 
-class GPUProcessManager:
+class GPUResourceManager:
     def __init__(self, gpu_info: GPUInfo):
         self.gpu_info = gpu_info
         self.physical_gpu_handle = None
@@ -110,7 +111,8 @@ class GPUProcessManager:
                             'id': profile_info.id,
                             'slice_count': profile_info.sliceCount,
                             'memory_mb': profile_info.memorySizeMB,
-                            'name': profile_info.name.decode() if hasattr(profile_info, 'name') else f'Profile-{profile_info.id}'
+                            'name': profile_info.name.decode() if hasattr(profile_info,
+                                                                          'name') else f'Profile-{profile_info.id}'
                         })
 
                 except NVMLError as err:
@@ -207,7 +209,7 @@ class GPUProcessManager:
                 parent_gpu_bus_id, parent_physical_gpu_uuid)
         except NVMLError as err:
             log_error_gpu_id = parent_gpu_bus_id or \
-                (self.gpu_info.bus_id if self.gpu_info else 'Unknown GPU')
+                               (self.gpu_info.bus_id if self.gpu_info else 'Unknown GPU')
             print(f'[{log_error_gpu_id}] Critical NVMLError during MIG device enumeration: {err}. '
                   'Cannot reliably list MIG devices.')
             return None
@@ -222,7 +224,8 @@ class GPUProcessManager:
 
         return sorted(list(set(uuids)))
 
-    def launch_vllm_instance(self, mig_device_uuid: str, model_name_or_path: str, port: int, tensor_parallel_size: int = 1, api_host: str = '0.0.0.0'):
+    def launch_vllm_instance(self, mig_device_uuid: str, model_name_or_path: str, port: int,
+                             tensor_parallel_size: int = 1, api_host: str = '0.0.0.0'):
         if port in self.managed_processes:
             print(f'Port {port} is already in use by a managed vLLM instance.')
             return None
@@ -410,7 +413,7 @@ class GPUProcessManager:
                 # If the current device ID is the parent GPU's ID, check if it is a MIG child.
                 if current_device_bus_id == parent_gpu_bus_id:
                     if current_device_uuid != parent_physical_gpu_uuid and \
-                       current_device_uuid.startswith('MIG-'):
+                            current_device_uuid.startswith('MIG-'):
                         if current_device_uuid not in discovered_uuids:
                             discovered_uuids.append(current_device_uuid)
             except NVMLError:
@@ -422,7 +425,7 @@ class GPUProcessManager:
         '''Returns sorted list of managed GI UUIDs if enumeration found none, else None.'''
         if self.managed_gis:
             log_gpu_id = parent_gpu_bus_id_for_log or \
-                (self.gpu_info.bus_id if self.gpu_info else 'Unknown GPU')
+                         (self.gpu_info.bus_id if self.gpu_info else 'Unknown GPU')
 
             print(
                 f'[{log_gpu_id}] No MIG devices auto-discovered via system enumeration for this GPU.')

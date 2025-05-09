@@ -4,10 +4,10 @@ from sqlite3 import Connection
 from typing import List
 
 import db.connector as db
-import metrics.gpu
-import metrics.memory
+import hardware.metrics.gpu
+import hardware.metrics.memory
 from enums.queries import FixedDBQuery
-from info.collection import collect_system_info
+from hardware.info import collect_system_info
 from models.cpu_info import CPUInfo
 from models.gpu_info import GPUInfo
 from models.gpu_status_record import GPUStatusRecord
@@ -74,11 +74,11 @@ if __name__ == '__main__':
             # Find session_id for the active test session (if any):
             session_id_result: list | None = connector.execute_query(
                 FixedDBQuery.FIND_ACTIVE_SESSION_ID, fetch=True)
-            status_records: List[GPUStatusRecord] | None = metrics.gpu.get_gpu_usage_info(
+            status_records: List[GPUStatusRecord] | None = hardware.metrics.gpu.get_gpu_usage_info(
                 gpus)
 
             # Get system RAM usage statistics:
-            ram_usage_stats: tuple = metrics.memory.get_ram_usage()
+            ram_usage_stats: tuple = hardware.metrics.memory.get_ram_usage()
 
             if status_records is None:
                 print('No NVIDIA GPU handles could be found via NVML. Exiting...')

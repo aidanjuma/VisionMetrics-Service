@@ -6,7 +6,6 @@ from pynvml import *
 from enums.mig_status import MIGStatus
 from models.gpu_info import GPUInfo
 from models.managed_gpu_instance import ManagedGpuInstance
-from models.managed_vllm_instance import ManagedVllmInstance
 
 
 class GPUResourceManager:
@@ -14,7 +13,6 @@ class GPUResourceManager:
         self.gpu_info = gpu_info
         self.physical_gpu_handle = None
         self.managed_gis: dict[str, ManagedGpuInstance] = {}
-        self.managed_processes: dict[int, ManagedVllmInstance] = {}
 
         # Attempt to initialize NVML; handle error(s) if it fails:
         try:
@@ -37,6 +35,11 @@ class GPUResourceManager:
 
             # Re-raise the original NVMLError that prompted this cleanup attempt.
             raise
+
+    def __del__(self):
+        # If the physical_gpu_handle is still valid, call for clean-up.
+        if hasattr(self, 'physical_gpu_handle') and self.physical_gpu_handle:
+            self.__cleanup(destroy_managed_gis=False)
 
     def enable_mig_mode(self) -> bool:
         # Check if the GPU supports MIG mode; only continue if it does.
@@ -209,7 +212,7 @@ class GPUResourceManager:
                 parent_gpu_bus_id, parent_physical_gpu_uuid)
         except NVMLError as err:
             log_error_gpu_id = parent_gpu_bus_id or \
-                               (self.gpu_info.bus_id if self.gpu_info else 'Unknown GPU')
+                (self.gpu_info.bus_id if self.gpu_info else 'Unknown GPU')
             print(f'[{log_error_gpu_id}] Critical NVMLError during MIG device enumeration: {err}. '
                   'Cannot reliably list MIG devices.')
             return None
@@ -223,79 +226,6 @@ class GPUResourceManager:
         print(f'[{parent_gpu_bus_id}] No MIG devices (GIs/CIs) found for this GPU (UUID: {parent_physical_gpu_uuid}).')
 
         return sorted(list(set(uuids)))
-
-    def launch_vllm_instance(self, mig_device_uuid: str, model_name_or_path: str, port: int,
-                             tensor_parallel_size: int = 1, api_host: str = '0.0.0.0'):
-        if port in self.managed_processes:
-            print(f'Port {port} is already in use by a managed vLLM instance.')
-            return None
-        # Construct vLLM command:
-        command = [
-            'python3', '-m', 'vllm.entrypoints.openai.api_server',
-            '--host', str(api_host),
-            '--port', str(port),
-            '--model', str(model_name_or_path),
-            '--tensor-parallel-size', str(tensor_parallel_size)
-        ]
-
-        log_file_out = f'vllm_port_{port}_out.log'
-        log_file_err = f'vllm_port_{port}_err.log'
-
-        print(
-            f'Launching vLLM on MIG UUID <{mig_device_uuid}>, Port <{port}>, Model <{model_name_or_path}>')
-
-        try:
-            # Using Popen for non-blocking execution:
-            with open(log_file_out, 'wb') as stdout, open(log_file_err, 'wb') as stderr:
-                process = subprocess.Popen(
-                    command, stdout=stdout, stderr=stderr)
-
-            # Create and store ManagedVllmInstance object:
-            vllm_instance_data = ManagedVllmInstance(
-                port=port,
-                process=process,
-                mig_uuid=mig_device_uuid,
-                model_name_or_path=model_name_or_path,
-                command=command
-            )
-            self.managed_processes[port] = vllm_instance_data
-            print(
-                f'vLLM instance for port <{port}> started with PID <{process.pid}>')
-            return process.pid
-        except Exception as err:
-            print(f'Error launching vLLM instance on port {port}: {err}')
-            return None
-
-    def terminate_vllm_instance(self, port):
-        if port not in self.managed_processes:
-            print(f'No managed vLLM instance found for port {port}.')
-            return False
-
-        managed_instance = self.managed_processes[port]
-        process_to_terminate = managed_instance.process
-        print(
-            f'Terminating vLLM instance on port <{port} (PID <{process_to_terminate.pid}>)...')
-
-        try:
-            process_to_terminate.terminate()
-            process_to_terminate.wait(timeout=10)
-            print(f'vLLM instance on port <{port}> terminated.')
-
-        except subprocess.TimeoutExpired:
-            print(
-                f'vLLM instance on port <{port}> did not terminate gracefully, forcing kill...')
-            process_to_terminate.kill()
-            process_to_terminate.wait()
-            print(f'vLLM instance on port <{port}> killed.')
-        except Exception as err:
-            print(
-                f'Error during termination of vLLM PID <{process_to_terminate.pid}>: {err}')
-            return False
-
-        finally:
-            del self.managed_processes[port]
-
-        return True
 
     def __destroy_compute_instances_on_gi(self, managed_gi: ManagedGpuInstance, gi_uuid: str):
         try:
@@ -425,7 +355,7 @@ class GPUResourceManager:
         '''Returns sorted list of managed GI UUIDs if enumeration found none, else None.'''
         if self.managed_gis:
             log_gpu_id = parent_gpu_bus_id_for_log or \
-                         (self.gpu_info.bus_id if self.gpu_info else 'Unknown GPU')
+                (self.gpu_info.bus_id if self.gpu_info else 'Unknown GPU')
 
             print(
                 f'[{log_gpu_id}] No MIG devices auto-discovered via system enumeration for this GPU.')
@@ -434,28 +364,19 @@ class GPUResourceManager:
 
         return None
 
-    def __cleanup(self, destroy_created_gis=True):
-        # Terminate all managed vLLM processes:
-        ports_to_terminate = list(self.managed_processes.keys())
-        for port in ports_to_terminate:
-            print(f'Terminating vLLM on port {port} during clean-up...')
-            self.terminate_vllm_instance(port)
-
+    def __cleanup(self, destroy_managed_gis=True):
         # Destroy managed GIs if requested:
-        if destroy_created_gis:
-            gis_to_destroy = list(self.managed_gis.keys())
-            for gi_uuid in gis_to_destroy:
-                print(f'Destroying GI {gi_uuid} during clean-up...')
+        if destroy_managed_gis:
+            # Iterate over a copy of managed_gis keys as self.destroy_gi will modify the dictionary
+            managed_gis_to_destroy = list(self.managed_gis.keys())
+            for gi_uuid in managed_gis_to_destroy:
+                # destroy_gi already checks if gi_uuid is in self.managed_gis before attempting deletion
+                print(f'Destroying managed GI {gi_uuid} during clean-up...')
+                # destroy_gi removes from self.managed_gis upon success
                 self.destroy_gi(gi_uuid)
 
-        # Disable MIG mode if it was enabled by this manager:
         try:
             nvmlShutdown()
             print('NVML shut down by clean-up process.')
         except NVMLError as err:
             print(f'Error during NVML shutdown: {err}')
-
-    def __del__(self):
-        # If the physical_gpu_handle is still valid, call for cleanup().
-        if hasattr(self, 'physical_gpu_handle') and self.physical_gpu_handle:
-            self.__cleanup(destroy_created_gis=False)

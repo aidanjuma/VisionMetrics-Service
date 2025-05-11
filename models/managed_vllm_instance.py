@@ -10,6 +10,6 @@ class ManagedVllmInstance:
     """
     port: int
     process: subprocess.Popen
-    mig_uuid: str
+    mig_uuids: List[str]
     model_name_or_path: str
     command: List[str]

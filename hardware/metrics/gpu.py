@@ -102,6 +102,7 @@ def get_gpu_usage_info(gpus: List[GPUInfo]) -> list[GPUStatusRecord] | None:
             name=gpu.name,
             bus_id=gpu.bus_id,
             vram_capacity_mib=gpu.vram_capacity_mib,
+            physical_gpu_index=gpu.physical_gpu_index,
             timestamp=timestamp,
             p_state=p_state,
             temperature=temperature,

@@ -1,26 +1,38 @@
 import os
+import threading
 import time
 from typing import List, Dict
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.prompt import Prompt
+from rich.table import Table
 
 import db.connector as db
 import hardware.metrics.gpu
 import hardware.metrics.memory
 from enums.queries import FixedDBQuery
-from hardware.info import collect_system_info
-from models.cpu_info import CPUInfo
-from models.gpu_info import GPUInfo
-from models.gpu_status_record import GPUStatusRecord
-from models.system_info import SystemInfo
+from hardware.info.collection import collect_system_info
 from hardware.managers.gpu_resource_manager import GPUResourceManager
 from hardware.managers.process_manager import ProcessManager
+from models.cpu_info import CPUInfo
+from models.gpu_status_record import GPUStatusRecord
+from models.system_info import SystemInfo
 
-# -= Constants =-
+CONSOLE = Console()
+
+# -= Globals =-
 DB_CONNECTOR: db.DBConnector | None = None
 GPU_RESOURCE_MANAGERS: Dict[str, GPUResourceManager] = {}
 PROCESS_MANAGER: ProcessManager | None = None
 SYSTEM_INFO_CACHE: SystemInfo | None = None
 LATEST_SYSTEM_ID_CACHE: int | None = None
 HAS_NVIDIA_GPU_FLAG: bool = False
+
+# -= Monitoring State =-
+MONITORING_THREAD: threading.Thread | None = None
+STOP_MONITORING_EVENT = threading.Event()
+MONITORING_ACTIVE = False
 
 # -= Directory & Database Setup =-
 CWD: str = os.getcwd()
@@ -46,7 +58,7 @@ def setup_initial_resources() -> None:
     print('Connection to the database established successfully.')
 
     # Collect system information, i.e. CPU, GPU(s), RAM, disk, and total VRAM capacity.
-    SYSTEM_INFO_CACHE: SystemInfo = collect_system_info()
+    SYSTEM_INFO_CACHE = collect_system_info()
     system_info_record: tuple = (SYSTEM_INFO_CACHE.ram_capacity,
                                  SYSTEM_INFO_CACHE.disk_capacity,
                                  SYSTEM_INFO_CACHE.total_vram_capacity)
@@ -87,70 +99,252 @@ def setup_initial_resources() -> None:
     HAS_NVIDIA_GPU_FLAG = temp_has_nvidia_gpu
 
 
-def start_monitoring_loop() -> None:
-    if not DB_CONNECTOR or not SYSTEM_INFO_CACHE or not HAS_NVIDIA_GPU_FLAG:
-        print('Monitoring cannot start. Initial resources not available or no NVIDIA GPU detected for monitoring.')
-        return
+def __monitoring_worker(stop_event: threading.Event) -> None:
+    global MONITORING_ACTIVE
 
-    print('Starting metrics collection loop (Ctrl+C to stop)...')
+    session_id_result: list | None = None
     try:
         # Get the latest session ID from the database:
-        session_id_result: list | None = DB_CONNECTOR.execute_query(
-            FixedDBQuery.FIND_ACTIVE_SESSION_ID, fetch=True)
+        if DB_CONNECTOR:
+            session_id_result = DB_CONNECTOR.execute_query(
+                FixedDBQuery.FIND_ACTIVE_SESSION_ID, fetch=True)
+        else:
+            CONSOLE.print(
+                '[bold red]Database connector not available in monitoring worker.[/bold red]')
+            MONITORING_ACTIVE = False
+            return
 
-        while True:
-            # Filter for NVIDIA GPUs for monitoring, as get_gpu_usage_info() expects NVML-compatible GPUs:
-            nvidia_gpus = [
-                gpu for gpu in SYSTEM_INFO_CACHE.gpus if 'nvidia' in gpu.name.lower()]
-            if not nvidia_gpus:
-                print(
-                    'No NVIDIA GPUs available for status monitoring. Stopping monitor.')
-                break
+        if not SYSTEM_INFO_CACHE:
+            CONSOLE.print('[bold red]System info cache lost.[/bold red]')
 
-            # Get GPU usage information for each NVIDIA GPU:
+        # Filter for NVIDIA GPUs for monitoring:
+        nvidia_gpus = [
+            gpu for gpu in SYSTEM_INFO_CACHE.gpus if 'nvidia' in gpu.name.lower()]
+        if not nvidia_gpus:
+            CONSOLE.print(
+                '[bold yellow]No NVIDIA GPUs available for status monitoring. Stopping monitor.[/bold yellow]')
+
+        # Here is the actual monitoring logic:
+        while not stop_event.is_set():
+            # Get GPU usage information:
             status_records: List[GPUStatusRecord] | None = hardware.metrics.gpu.get_gpu_usage_info(
                 nvidia_gpus)
             ram_usage_stats: tuple = hardware.metrics.memory.get_ram_usage()
 
-            # If no status records could be found, stop monitoring.
             if status_records is None:
-                print(
-                    'No NVIDIA GPU handles could be found via NVML for status. Stopping monitor...')
+                CONSOLE.print(
+                    '[bold yellow]No NVIDIA GPU handles could be found via NVML for status. Stopping monitor...[/bold yellow]')
                 break
 
             # Write the status record(s) to the database:
             for record in status_records:
+                print(record)
                 record.session_id = int(
-                    session_id_result[0][0]) if session_id_result else None
+                    session_id_result[0][0]) if session_id_result and session_id_result[0] else None
                 gpu_id_result = DB_CONNECTOR.execute_query(FixedDBQuery.FIND_GPU_ID_FROM_BUS_ID,
                                                            (record.bus_id,), fetch=True)
                 if not gpu_id_result or not gpu_id_result[0]:
-                    print(
-                        f'Warning: Could not find GPU ID for bus ID {record.bus_id}. Skipping record...')
+                    CONSOLE.print(
+                        f'[yellow]Warning: Could not find GPU ID for bus ID {record.bus_id}. Skipping record...[/yellow]')
                     continue
                 gpu_id = gpu_id_result[0][0]
 
-                # Structure the status record for database insertion:
                 status_record_tuple = (
-                    gpu_id, record.timestamp, record.p_state, record.temperature, record.gpu_utilization,
-                    record.memory_utilization, record.clock_sm, record.clock_memory, record.clock_graphics,
-                    record.power_usage, record.memory_free_mib, record.memory_used_mib, record.pcie_rx, record.pcie_tx,
-                    # ram_usage_stats[1] is total_gb, ram_usage_stats[0] is used_gb
-                    record.session_id, ram_usage_stats[0], ram_usage_stats[1])
+                    gpu_id,                       # 1. gpu_id
+                    record.timestamp,             # 2. timestamp
+                    record.p_state,               # 3. p_state
+                    record.temperature,           # 4. temperature
+                    record.gpu_utilization,       # 5. gpu_utilization
+                    record.memory_utilization,    # 6. memory_utilization
+                    record.clock_sm,              # 7. clock_sm
+                    record.clock_memory,          # 8. clock_memory
+                    record.clock_graphics,        # 9. clock_graphics
+                    record.power_usage,           # 10. power_usage
+                    record.memory_free_mib,       # 11. memory_free_mib
+                    record.memory_used_mib,       # 12. memory_used_mib
+                    record.pcie_rx,               # 13. pcie_rx
+                    record.pcie_tx,               # 14. pcie_tx
+                    record.session_id,            # 15. session_id
+                    ram_usage_stats[0],           # 16. system_ram_used_mib
+                    # 17. system_ram_used_percentage
+                    ram_usage_stats[1]
+                )
 
                 DB_CONNECTOR.execute_query(
                     FixedDBQuery.WRITE_GPU_STATUS_RECORD, status_record_tuple)
 
-            # Repeat roughly every second.
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print('Log collection stopped by user.')
+            # Check if the stop event has been set, before continuing the loop after 1 second:
+            if stop_event.wait(1.0):
+                break
+    except Exception as err:
+        CONSOLE.print(f'[bold red]Error during monitoring: {err}[/bold red]')
     finally:
-        print('Monitoring loop ended.')
+        CONSOLE.print(
+            '[bold yellow]Monitoring worker thread finished.[/bold yellow]')
+        MONITORING_ACTIVE = False
+
+
+def start_monitoring_loop() -> None:
+    global MONITORING_THREAD, MONITORING_ACTIVE, STOP_MONITORING_EVENT
+
+    if not DB_CONNECTOR or not SYSTEM_INFO_CACHE or not HAS_NVIDIA_GPU_FLAG:
+        CONSOLE.print(
+            '[bold red]Monitoring cannot start. Initial resources not available or no NVIDIA GPU detected.[/bold red]')
+        time.sleep(2)
+        return
+
+    if MONITORING_ACTIVE:
+        CONSOLE.print('[yellow]Monitoring is already active.[/yellow]')
+        time.sleep(1)
+        return
+
+    CONSOLE.print(
+        '[bold green]Starting metrics collection in background...[/bold green]')
+    STOP_MONITORING_EVENT.clear()
+    MONITORING_THREAD = threading.Thread(
+        target=__monitoring_worker, args=(STOP_MONITORING_EVENT,), daemon=True)
+    MONITORING_ACTIVE = True
+    MONITORING_THREAD.start()
+    time.sleep(1)
+
+
+def stop_monitoring_loop() -> None:
+    global MONITORING_THREAD, MONITORING_ACTIVE, STOP_MONITORING_EVENT
+
+    if not MONITORING_ACTIVE or MONITORING_THREAD is None:
+        CONSOLE.print('[yellow]Monitoring is not currently active.[/yellow]')
+        time.sleep(1)
+        return
+
+    CONSOLE.print(
+        '[bold yellow]Attempting to stop monitoring...[/bold yellow]')
+    STOP_MONITORING_EVENT.set()
+    MONITORING_THREAD.join(timeout=5.0)
+
+    if MONITORING_THREAD.is_alive():
+        CONSOLE.print(
+            '[bold red]Monitoring thread did not stop within timeout.[/bold red]')
+        MONITORING_ACTIVE = False
+    else:
+        CONSOLE.print(
+            '[bold green]Monitoring stopped successfully.[/bold green]')
+        MONITORING_ACTIVE = False
+
+    MONITORING_THREAD = None
+    time.sleep(1)
+
+
+def display_system_info() -> None:
+    if not SYSTEM_INFO_CACHE:
+        CONSOLE.print(
+            '[bold red]System information cache not available.[/bold red]')
+        return
+
+    # -= CPU Info =-
+    cpu_panel = Panel(
+        f'[bold]Name:[/bold] {SYSTEM_INFO_CACHE.cpu.name} '
+        f'[bold]Cores:[/bold] {SYSTEM_INFO_CACHE.cpu.total_cores} '
+        f'[bold]Frequency:[/bold] {SYSTEM_INFO_CACHE.cpu.min_frequency}-{SYSTEM_INFO_CACHE.cpu.max_frequency} MHz',
+        title='[bold blue]CPU Info[/bold blue]',
+        expand=False
+    )
+
+    # -= RAM Info =-
+    ram_panel = Panel(
+        f'[bold]Total Capacity:[/bold] {SYSTEM_INFO_CACHE.ram_capacity} GB',
+        title='[bold green]RAM Info[/bold green]',
+        expand=False
+    )
+
+    # -= GPU Info =-
+    gpu_table = Table(title='[bold magenta]GPU(s) Info[/bold magenta]',
+                      show_header=True, header_style='bold magenta')
+    gpu_table.add_column('Bus ID', style='dim', width=15)
+    gpu_table.add_column('Name', width=30)
+    gpu_table.add_column('VRAM (MiB)', justify='right')
+
+    total_vram = 0
+    for gpu in SYSTEM_INFO_CACHE.gpus:
+        gpu_table.add_row(
+            gpu.bus_id,
+            gpu.name,
+            str(gpu.vram_capacity_mib)
+        )
+        total_vram += gpu.vram_capacity_mib
+
+    vram_panel = Panel(
+        f'[bold]Total VRAM:[/bold] {total_vram} MiB',
+        title='[bold cyan]Total VRAM[/bold cyan]',
+        expand=False
+    )
+
+    CONSOLE.print(cpu_panel)
+    CONSOLE.print(ram_panel)
+    CONSOLE.print(gpu_table)
+    CONSOLE.print(vram_panel)
+
+
+def display_menu() -> str:
+    CONSOLE.print('\n[bold underline]Main Menu[/bold underline]')
+
+    status_text = '[green]Active[/green]' if MONITORING_ACTIVE else '[yellow]Inactive[/yellow]'
+    CONSOLE.print(f'Monitoring Status: {status_text}')
+
+    options = {}
+    choices = []
+    if MONITORING_ACTIVE:
+        options = {'1': 'Stop Monitoring', '2': 'Exit'}
+        choices = ['1', '2']
+    else:
+        options = {'1': 'Start Monitoring', '2': 'Exit'}
+        choices = ['1', '2']
+
+    for key, value in options.items():
+        CONSOLE.print(f'{key}. {value}')
+
+    choice = Prompt.ask('Choose an option', choices=choices, default='2')
+    if choice == '1':
+        return 'stop' if MONITORING_ACTIVE else 'start'
+    elif choice == '2':
+        return 'exit'
+    else:
+        return 'exit'
+
+
+def cli():
+    try:
+        setup_initial_resources()
+        if DB_CONNECTOR is None:
+            CONSOLE.print(
+                '[bold red]Database connection failed during setup. Exiting.[/bold red]')
+            return
+        if SYSTEM_INFO_CACHE is None:
+            CONSOLE.print(
+                '[bold red]System info collection failed during setup. Exiting.[/bold red]')
+            return
+    except Exception as e:
+        CONSOLE.print(
+            f'[bold red]An error occurred during initial setup: {e}[/bold red]')
+        return
+
+    while True:
+        CONSOLE.clear()
+        display_system_info()
+        choice = display_menu()
+
+        if choice == 'start':
+            start_monitoring_loop()
+        elif choice == 'stop':
+            stop_monitoring_loop()
+        elif choice == 'exit':
+            CONSOLE.print('[bold cyan]Exiting application.[/bold cyan]')
+            if MONITORING_ACTIVE:
+                stop_monitoring_loop()
+            break
 
 
 def main():
-    pass
+    cli()
 
 
 if __name__ == '__main__':

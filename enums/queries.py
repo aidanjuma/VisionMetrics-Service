@@ -359,3 +359,16 @@ class FixedDBQuery(enum.Enum):
     FIND_LATEST_SYSTEM_ID = 'SELECT MAX(system_id) as latest_system_id FROM system_info;'
     FIND_GPU_ID_FROM_BUS_ID = 'SELECT gpu_id FROM gpu_info WHERE bus_id = ?;'
     FIND_ACTIVE_SESSION_ID = 'SELECT id FROM test_session WHERE is_active = 1;'
+    COUNT_GPU_STATUS_RECORDS = 'SELECT COUNT(*) FROM gpu_status;'
+    FETCH_GPU_STATUS_PAGE = '''SELECT gs.timestamp,
+                                      gi.model_name,
+                                      gs.temperature,
+                                      gs.gpu_utilization,
+                                      gs.memory_utilization,
+                                      gs.power_usage,
+                                      gs.memory_used_mib,
+                                      gs.system_ram_used_mib
+                               FROM gpu_status gs
+                                        JOIN gpu_info gi ON gs.gpu_id = gi.gpu_id
+                               ORDER BY gs.timestamp DESC LIMIT ?
+                               OFFSET ?;'''

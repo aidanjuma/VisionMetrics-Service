@@ -3,6 +3,7 @@ import threading
 import time
 from typing import List, Dict
 
+import readchar
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
@@ -283,31 +284,125 @@ def display_system_info() -> None:
     CONSOLE.print(vram_panel)
 
 
+def display_monitoring_data() -> None:
+    if not DB_CONNECTOR:
+        CONSOLE.print('[bold red]Database connector not available.[/bold red]')
+        time.sleep(2)
+        return
+
+    page_number = 1
+    page_size = 10
+
+    while True:
+        # Get total record count:
+        count_result = DB_CONNECTOR.execute_query(
+            FixedDBQuery.COUNT_GPU_STATUS_RECORDS, fetch=True)
+        total_records = count_result[0][0] if count_result and count_result[0] else 0
+        if total_records == 0:
+            CONSOLE.clear()
+            CONSOLE.print('[yellow]No monitoring data found.[/yellow]')
+            CONSOLE.print('Press Enter to return to the menu.')
+            input()
+            return
+
+        # Display current page position out of page count:
+        total_pages = (total_records + page_size - 1) // page_size
+        page_number = max(1, min(page_number, total_pages))
+
+        # Calculate offset and fetch data for the current page:
+        offset = (page_number - 1) * page_size
+        data = DB_CONNECTOR.execute_query(
+            FixedDBQuery.FETCH_GPU_STATUS_PAGE, (page_size, offset), fetch=True)
+
+        # Prepare table for display:
+        table = Table(title=f'GPU Monitoring Data - Page {page_number}/{total_pages}',
+                      show_header=True, header_style='bold cyan')
+        table.add_column('Timestamp', style='dim', width=26)
+        table.add_column('GPU Name')
+        table.add_column('Temp (°C)', justify='right')
+        table.add_column('GPU Util (%)', justify='right')
+        table.add_column('Mem Util (%)', justify='right')
+        table.add_column('Power (W)', justify='right')
+        table.add_column('VRAM Used (MiB)', justify='right')
+        table.add_column('RAM Used (MiB)', justify='right')
+
+        if not data:
+            CONSOLE.print('[yellow]No data found for this page.[/yellow]')
+            CONSOLE.print('Press Enter to return to the menu.')
+            input()
+            return
+
+        for row in data:
+            # Perform formatting on timestamp (readability):
+            timestamp = row[0].replace('T', ' ')
+            if '.' in timestamp:
+                timestamp = timestamp.split('.')[0]
+
+            table.add_row(
+                timestamp,
+                str(row[1]),  # GPU Name
+                str(row[2]),  # Temp
+                str(row[3]),  # GPU Util
+                str(row[4]),  # Mem Util
+                str(row[5]),  # Power
+                str(row[6]),  # VRAM Used
+                str(row[7])   # RAM Used
+            )
+
+        CONSOLE.clear()
+        CONSOLE.print(table)
+        CONSOLE.print(f"Page {page_number}/{total_pages}")
+
+        # Prompt for user interaction:
+        CONSOLE.print(
+            "Press '[' for previous, ']' for next page, or 'q' to return to menu...")
+
+        # Perform action if requested:
+        try:
+            action = readchar.readkey()
+        except KeyboardInterrupt:
+            action = 'q'
+
+        match action:
+            case '[':
+                if page_number > 1:
+                    page_number -= 1
+            case ']':
+                if page_number < total_pages:
+                    page_number += 1
+            case 'q':
+                break
+
+
 def display_menu() -> str:
     CONSOLE.print('\n[bold underline]Main Menu[/bold underline]')
 
     status_text = '[green]Active[/green]' if MONITORING_ACTIVE else '[yellow]Inactive[/yellow]'
     CONSOLE.print(f'Monitoring Status: {status_text}')
 
-    options = {}
-    choices = []
-    if MONITORING_ACTIVE:
-        options = {'1': 'Stop Monitoring', '2': 'Exit'}
-        choices = ['1', '2']
-    else:
-        options = {'1': 'Start Monitoring', '2': 'Exit'}
-        choices = ['1', '2']
+    # Define options:
+    options = {
+        '1': 'Stop Monitoring' if MONITORING_ACTIVE else 'Start Monitoring',
+        '2': 'View Monitoring Data',
+        '3': 'Exit'
+    }
+    choices = list(options.keys())
 
+    # Display options:
     for key, value in options.items():
         CONSOLE.print(f'{key}. {value}')
 
-    choice = Prompt.ask('Choose an option', choices=choices, default='2')
-    if choice == '1':
-        return 'stop' if MONITORING_ACTIVE else 'start'
-    elif choice == '2':
-        return 'exit'
-    else:
-        return 'exit'
+    # Prompt for user input:
+    choice = Prompt.ask('Choose an option', choices=choices, default='3')
+    match choice:
+        case '1':
+            return 'stop' if MONITORING_ACTIVE else 'start'
+        case '2':
+            return 'view_monitoring_data'
+        case '3':
+            return 'exit'
+        case _:
+            return 'exit'
 
 
 def cli():
@@ -331,15 +426,18 @@ def cli():
         display_system_info()
         choice = display_menu()
 
-        if choice == 'start':
-            start_monitoring_loop()
-        elif choice == 'stop':
-            stop_monitoring_loop()
-        elif choice == 'exit':
-            CONSOLE.print('[bold cyan]Exiting application.[/bold cyan]')
-            if MONITORING_ACTIVE:
+        match choice:
+            case 'start':
+                start_monitoring_loop()
+            case 'stop':
                 stop_monitoring_loop()
-            break
+            case 'view_monitoring_data':
+                display_monitoring_data()
+            case 'exit':
+                CONSOLE.print('[bold cyan]Exiting application.[/bold cyan]')
+                if MONITORING_ACTIVE:
+                    stop_monitoring_loop()
+                break
 
 
 def main():

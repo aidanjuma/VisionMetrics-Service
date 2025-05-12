@@ -72,7 +72,7 @@ def get_gpu_usage_info(gpus: List[GPUInfo]) -> list[GPUStatusRecord] | None:
 
         # Get power usage (in Watts, W):
         try:
-            power_usage = pynvml.nvmlDeviceGetPowerUsage(handle)
+            power_usage = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000
         except pynvml.NVMLError:
             power_usage = None
 

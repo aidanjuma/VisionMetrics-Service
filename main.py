@@ -138,7 +138,6 @@ def __monitoring_worker(stop_event: threading.Event) -> None:
 
             # Write the status record(s) to the database:
             for record in status_records:
-                print(record)
                 record.session_id = int(
                     session_id_result[0][0]) if session_id_result and session_id_result[0] else None
                 gpu_id_result = DB_CONNECTOR.execute_query(FixedDBQuery.FIND_GPU_ID_FROM_BUS_ID,

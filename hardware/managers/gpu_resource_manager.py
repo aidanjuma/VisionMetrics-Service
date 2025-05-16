@@ -193,7 +193,7 @@ class GPUResourceManager:
         # Lists UUIDs of all active MIG 'devices' on this GPU.
         if not self.physical_gpu_handle:
             print(
-                f'[{self.gpu_info.bus_id if self.gpu_info else 'Unknown GPU'}] Error: Physical GPU handle not initialized.')
+                f'[{self.gpu_info.bus_id if self.gpu_info else "Unknown GPU"}] Error: Physical GPU handle not initialized.')
             return None
 
         # Get the parent GPU's bus ID and UUID:

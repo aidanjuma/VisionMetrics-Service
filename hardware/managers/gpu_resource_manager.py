@@ -295,8 +295,13 @@ class GPUResourceManager:
         '''Retrieves PCI bus ID and UUID for the physical GPU of this manager instance.'''
         try:
             parent_pci_info = nvmlDeviceGetPciInfo(self.physical_gpu_handle)
-            bus_id = parent_pci_info.busId.decode('utf-8')
-            uuid = nvmlDeviceGetUUID(self.physical_gpu_handle).decode('utf-8')
+            # Check if busId is bytes or string and handle accordingly:
+            bus_id = parent_pci_info.busId.decode(
+                'utf-8') if isinstance(parent_pci_info.busId, bytes) else parent_pci_info.busId
+            # ...similarly for UUID.
+            uuid_raw = nvmlDeviceGetUUID(self.physical_gpu_handle)
+            uuid = uuid_raw.decode(
+                'utf-8') if isinstance(uuid_raw, bytes) else uuid_raw
             return bus_id, uuid
         except NVMLError as err:
             error_source_gpu_id = self.gpu_info.bus_id if self.gpu_info else 'Unknown GPU (handle exists)'
@@ -336,9 +341,12 @@ class GPUResourceManager:
                 idx)
             try:
                 current_device_pci_info = nvmlDeviceGetPciInfo(handle)
+                # Check if busId is bytes or string and handle accordingly:
                 current_device_bus_id = current_device_pci_info.busId.decode(
-                    'utf-8')
-                current_device_uuid = nvmlDeviceGetUUID(handle).decode('utf-8')
+                    'utf-8') if isinstance(current_device_pci_info.busId, bytes) else current_device_pci_info.busId
+                uuid_raw = nvmlDeviceGetUUID(handle)  # ...similarly for UUID.
+                current_device_uuid = uuid_raw.decode(
+                    'utf-8') if isinstance(uuid_raw, bytes) else uuid_raw
 
                 # If the current device ID is the parent GPU's ID, check if it is a MIG child.
                 if current_device_bus_id == parent_gpu_bus_id:

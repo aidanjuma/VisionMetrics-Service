@@ -103,7 +103,7 @@ class VisionMetricsServiceCLI:
 
         self.has_nvidia_gpu_flag = temp_has_nvidia_gpu
 
-    def _monitoring_worker(self, stop_event: threading.Event) -> None:
+    def __monitoring_worker(self, stop_event: threading.Event) -> None:
         session_id_result: list | None = None
         try:
             # Get the latest session ID from the database:
@@ -204,7 +204,7 @@ class VisionMetricsServiceCLI:
             '[bold green]Starting metrics collection in background...[/bold green]')
         self.stop_monitoring_event.clear()
         self.monitoring_thread = threading.Thread(
-            target=self._monitoring_worker, args=(self.stop_monitoring_event,), daemon=True)
+            target=self.__monitoring_worker, args=(self.stop_monitoring_event,), daemon=True)
         self.monitoring_active = True
         self.monitoring_thread.start()
         time.sleep(1)
@@ -390,7 +390,8 @@ class VisionMetricsServiceCLI:
         options = {
             '1': 'Stop Monitoring' if self.monitoring_active else 'Start Monitoring',
             '2': 'View Monitoring Data',
-            '3': 'Exit'
+            '3': 'MIG Profile Manager',
+            '4': 'Exit'
         }
         choices = list(options.keys())
 
@@ -399,13 +400,15 @@ class VisionMetricsServiceCLI:
             self.console.print(f'{key}. {value}')
 
         # Prompt for user input:
-        choice = Prompt.ask('Choose an option', choices=choices, default='3')
+        choice = Prompt.ask('Choose an option', choices=choices, default='4')
         match choice:
             case '1':
                 return 'stop' if self.monitoring_active else 'start'
             case '2':
                 return 'view_monitoring_data'
             case '3':
+                return 'mig_profile_manager'
+            case '4':
                 return 'exit'
             case _:
                 return 'exit'
@@ -422,7 +425,177 @@ class VisionMetricsServiceCLI:
             '4': 'Return to Main Menu'
         }
 
-        # TODO: Implement MIG profile manager functionality.
+        while True:
+            self.console.clear()
+            self.console.print(
+                '\n[bold underline]MIG Profile Manager[/bold underline]')
+
+            # Display options:
+            for key, value in options.items():
+                self.console.print(f'{key}. {value}')
+
+            # Get user choice:
+            choice = Prompt.ask(
+                'Choose an option', choices=list(options.keys()), default='4')
+
+            if choice == '4':
+                break
+
+            # Find available GPUs:
+            gpus = self.system_info_cache.gpus if self.system_info_cache else []
+            if not gpus:
+                self.console.print(
+                    '[bold red]No GPUs detected in the system.[/bold red]')
+                self.console.print(
+                    'Press Enter to return to the MIG Profile Manager.')
+                input()
+                continue
+
+            # List GPUs and let user select one:
+            self.console.print('\n[bold]Available GPUs:[/bold]')
+            gpu_table = Table(show_header=True, header_style='bold cyan')
+            gpu_table.add_column('#', style='dim', width=3)
+            gpu_table.add_column('Bus ID', style='dim', width=15)
+            gpu_table.add_column('Name', width=30)
+
+            for idx, gpu in enumerate(gpus):
+                gpu_table.add_row(str(idx + 1), gpu.bus_id, gpu.name)
+
+            self.console.print(gpu_table)
+
+            # Get user's GPU selection:
+            gpu_idx = int(Prompt.ask('Select GPU by number', choices=[
+                          str(i + 1) for i in range(len(gpus))], default='1'))
+            selected_gpu = gpus[gpu_idx - 1]
+
+            # Create GPU resource manager for the selected GPU:
+            gpu_manager = GPUResourceManager(selected_gpu)
+
+            match choice:
+                case '1':  # Create MIG Profile
+                    self.__create_mig_profile(gpu_manager)
+                case '2':  # Delete MIG Profile
+                    self.__delete_mig_profile(gpu_manager)
+                case '3':  # List MIG Profiles
+                    self.__list_mig_profiles(gpu_manager)
+
+    def __create_mig_profile(self, gpu_manager: GPUResourceManager) -> None:
+        self.console.print('\n[bold]Create MIG Profile[/bold]')
+
+        # Check if MIG mode is enabled:
+        if self.__ensure_mig_mode(gpu_manager):
+            # Get available profiles:
+            profiles = gpu_manager.list_gi_profiles()
+
+            if not profiles:
+                self.console.print(
+                    '[yellow]No GPU Instance profiles available for this GPU.[/yellow]')
+                self.console.print('Press Enter to continue...')
+                input()
+                return
+
+            # Display available profiles
+            self.console.print('\n[bold]Available Profiles:[/bold]')
+            profile_table = Table(show_header=True, header_style='bold cyan')
+            profile_table.add_column('Profile ID', style='dim', width=10)
+            profile_table.add_column('Name', width=30)
+            profile_table.add_column('Slice Count', justify='right')
+            profile_table.add_column('Memory (MB)', justify='right')
+
+            for profile in profiles:
+                profile_table.add_row(
+                    str(profile['profile_index']),
+                    profile['name'],
+                    str(profile['slice_count']),
+                    str(profile['memory_mb'])
+                )
+
+            self.console.print(profile_table)
+
+            # Get user's profile selection:
+            profile_choices = [str(profile['profile_index'])
+                               for profile in profiles]
+            profile_id = int(Prompt.ask(
+                'Select Profile ID', choices=profile_choices))
+
+            # Create the GPU instance:
+            result = gpu_manager.create_gi(profile_id)
+
+            if result:
+                self.console.print(
+                    f'[green]Successfully created GPU Instance with UUID: {result}[/green]')
+            else:
+                self.console.print('[red]Failed to create GPU Instance.[/red]')
+
+            self.console.print('Press Enter to continue...')
+            input()
+
+    def __delete_mig_profile(self, gpu_manager: GPUResourceManager) -> None:
+        self.console.print('\n[bold]Delete MIG Profile[/bold]')
+
+        # Get all MIG device UUIDs:
+        uuids = gpu_manager.get_all_mig_device_uuids()
+
+        if not uuids or len(uuids) == 0:
+            self.console.print(
+                '[yellow]No MIG devices found on this GPU.[/yellow]')
+            self.console.print('Press Enter to continue...')
+            input()
+            return
+
+        # Display available MIG devices:
+        self.console.print('\n[bold]Available MIG Devices:[/bold]')
+        for idx, uuid in enumerate(uuids):
+            self.console.print(f'{idx + 1}. {uuid}')
+
+        # Get user's selection:
+        idx = int(Prompt.ask('Select MIG device to delete', choices=[
+                  str(i + 1) for i in range(len(uuids))], default='1'))
+        selected_uuid = uuids[idx - 1]
+
+        # Delete the GPU instance:
+        result = gpu_manager.destroy_gi(selected_uuid)
+
+        if result:
+            self.console.print(
+                f'[green]Successfully deleted GPU Instance with UUID: {selected_uuid}[/green]')
+        else:
+            self.console.print('[red]Failed to delete GPU Instance.[/red]')
+
+        self.console.print('Press Enter to continue...')
+        input()
+
+    def __list_mig_profiles(self, gpu_manager: GPUResourceManager) -> None:
+        self.console.print('\n[bold]MIG Profiles[/bold]')
+
+        # Get all MIG device UUIDs:
+        uuids = gpu_manager.get_all_mig_device_uuids()
+
+        if not uuids or len(uuids) == 0:
+            self.console.print(
+                '[yellow]No MIG devices found on this GPU.[/yellow]')
+            self.console.print('Press Enter to continue...')
+            input()
+            return
+
+        # Display MIG devices:
+        self.console.print('\n[bold]Active MIG Devices:[/bold]')
+        for idx, uuid in enumerate(uuids):
+            self.console.print(f'{idx + 1}. {uuid}')
+
+        self.console.print('Press Enter to continue...')
+        input()
+
+    def __ensure_mig_mode(self, gpu_manager: GPUResourceManager) -> bool:
+        result = gpu_manager.enable_mig_mode()
+
+        if not result:
+            self.console.print(
+                '[red]Failed to enable MIG mode for this GPU.[/red]')
+            self.console.print('Press Enter to continue...')
+            input()
+
+        return result
 
     def run(self):
         try:
